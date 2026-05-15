@@ -1,0 +1,104 @@
+{
+  "id": "default",
+  "name": "Default Map",
+  "authors": [],
+  "createdOn": 1747353600000,
+  "access": {
+    "active": true,
+    "state": "APPROVED"
+  },
+  "hexes": [
+    { "q": -1, "r": -3, "s": 4 },
+    { "q": 0, "r": -3, "s": 3 },
+    { "q": 1, "r": -3, "s": 2 },
+    { "q": 2, "r": -3, "s": 1 },
+    { "q": 3, "r": -3, "s": 0 },
+    { "q": 4, "r": -3, "s": -1 },
+
+    { "q": -2, "r": -2, "s": 4 },
+    { "q": -1, "r": -2, "s": 3 },
+    { "q": 0, "r": -2, "s": 2 },
+    { "q": 1, "r": -2, "s": 1 },
+    { "q": 2, "r": -2, "s": 0 },
+    { "q": 3, "r": -2, "s": -1 },
+    { "q": 4, "r": -2, "s": -2 },
+
+    { "q": -3, "r": -1, "s": 4 },
+    { "q": -2, "r": -1, "s": 3 },
+    { "q": -1, "r": -1, "s": 2 },
+    { "q": 0, "r": -1, "s": 1 },
+    { "q": 1, "r": -1, "s": 0 },
+    { "q": 2, "r": -1, "s": -1 },
+    { "q": 3, "r": -1, "s": -2 },
+    { "q": 4, "r": -1, "s": -3 },
+
+    { "q": -4, "r": 0, "s": 4 },
+    { "q": -2, "r": 0, "s": 2 },
+    { "q": -1, "r": 0, "s": 1 },
+    { "q": 1, "r": 0, "s": -1 },
+    { "q": 2, "r": 0, "s": -2 },
+    { "q": 4, "r": 0, "s": -4 },
+
+    { "q": -4, "r": 1, "s": 3 },
+    { "q": -3, "r": 1, "s": 2 },
+    { "q": -2, "r": 1, "s": 1 },
+    { "q": -1, "r": 1, "s": 0 },
+    { "q": 0, "r": 1, "s": -1 },
+    { "q": 1, "r": 1, "s": -2 },
+    { "q": 2, "r": 1, "s": -3 },
+    { "q": 3, "r": 1, "s": -4 },
+
+    { "q": -4, "r": 2, "s": 2 },
+    { "q": -3, "r": 2, "s": 1 },
+    { "q": -2, "r": 2, "s": 0 },
+    { "q": -1, "r": 2, "s": -1 },
+    { "q": 0, "r": 2, "s": -2 },
+    { "q": 1, "r": 2, "s": -3 },
+    { "q": 2, "r": 2, "s": -4 },
+
+    { "q": -4, "r": 3, "s": 1 },
+    { "q": -3, "r": 3, "s": 0 },
+    { "q": -2, "r": 3, "s": -1 },
+    { "q": -1, "r": 3, "s": -2 },
+    { "q": 0, "r": 3, "s": -3 },
+    { "q": 1, "r": 3, "s": -4 }
+  ],
+  "baseGroups": [
+    {
+      "forPlayersCount": 2,
+      "hexes": [
+        { "coords": { "q": 0, "r": -4, "s": 4 }, "dice": [{ "type": "D6", "faceValue": 3, "stackIndex": 0 }] },
+        { "coords": { "q": 1, "r": -4, "s": 3 }, "dice": [{ "type": "D6", "faceValue": 3, "stackIndex": 0 }] },
+        { "coords": { "q": 2, "r": -4, "s": 2 }, "dice": [{ "type": "D6", "faceValue": 4, "stackIndex": 0 }] },
+        { "coords": { "q": 3, "r": -4, "s": 1 }, "dice": [{ "type": "D6", "faceValue": 3, "stackIndex": 0 }] },
+        { "coords": { "q": 4, "r": -4, "s": 0 }, "dice": [{ "type": "D6", "faceValue": 3, "stackIndex": 0 }] }
+      ]
+    },
+    {
+      "forPlayersCount": 2,
+      "hexes": [
+        { "coords": { "q": -4, "r": 4, "s": 0 }, "dice": [{ "type": "D6", "faceValue": 3, "stackIndex": 0 }] },
+        { "coords": { "q": -3, "r": 4, "s": -1 }, "dice": [{ "type": "D6", "faceValue": 3, "stackIndex": 0 }] },
+        { "coords": { "q": -2, "r": 4, "s": -2 }, "dice": [{ "type": "D6", "faceValue": 4, "stackIndex": 0 }] },
+        { "coords": { "q": -1, "r": 4, "s": -3 }, "dice": [{ "type": "D6", "faceValue": 3, "stackIndex": 0 }] },
+        { "coords": { "q": 0, "r": 4, "s": -4 }, "dice": [{ "type": "D6", "faceValue": 3, "stackIndex": 0 }] }
+      ]
+    }
+  ],
+  "focalPointsGroups": [
+    {
+      "forPlayersCount": 2,
+      "hexes": [
+        { "coords": { "q": -3, "r": 0, "s": 3 }, "active": false },
+        { "coords": { "q": 0, "r": 0, "s": 0 }, "active": true },
+        { "coords": { "q": 3, "r": 0, "s": -3 }, "active": false }
+      ]
+    }
+  ],
+  "victoryPointsTargets": [
+    {
+      "forPlayersCount": 2,
+      "target": 5
+    }
+  ]
+}
