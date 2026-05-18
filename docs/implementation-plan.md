@@ -65,10 +65,10 @@ Pure functions, no React. Each module is independently testable.
 - `isCombatMove(dice:DiceMap, dieId:string, targetCoords:HexCoords)` → boolean (true if target hex is occupied by an enemy die or tower)
 
 ### `focalPoints.js`
-- `evaluateFocalPoints(state:GameState, victoryPointsTarget:number)` → `{ newState, pointsScored }` — `pointsScored` is redundant with the score delta in `newState.players` but kept for future UI consumers (e.g. scoring animations)
+- `evaluateFocalPoints(state:GameState, rollFunction:()=>number)` → `{ newState, pointsScored }` — `pointsScored` is redundant with the score delta in `newState.players` but kept for future UI consumers (e.g. scoring animations)
   - Check if active player controls an active focal point
   - Award point, reroll (min(roll, original − 1)), rotate group
-- `rotateFocalGroup(group:FocalPointHex[])` → new group array (old active becomes passive, random passive becomes active)
+- `rotateFocalGroup(group:FocalPointHex[], scoredFocalPoints:FocalPointHex[])` → new group array (applies one rotation sequentially per scored focal point: each becomes passive then a random currently-passive FP is promoted; previously-scored FPs re-enter the passive pool and may be re-promoted, preserving active count even when passives are scarce)
 
 ### `actions.js`
 - `getLegalActions(state:GameState, mapHexSet:MapHexSet)` → `GameAction[]`
