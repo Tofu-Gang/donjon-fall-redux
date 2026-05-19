@@ -122,7 +122,19 @@ Game state is held in a React context. Only the minimal mutable data is stored. 
       dieId: string,
       retainedPower: number
     } | null
-  } | null
+  } | null,
+
+  // Set when a move action lands on an enemy hex before the player has chosen
+  // Push or Occupy; null at all other times
+  pendingCombat: {
+    attackerDieId: string,      // die (or tower top die) that initiated the attack
+    attackerCoords: HexCoords,  // hex the attacker occupied before moving
+    defenderCoords: HexCoords,  // hex being attacked (target)
+    isTowerAttack: boolean      // true = tower attack; Occupy unavailable
+  } | null,
+
+  actionTaken: boolean,         // true once the active player has used their action this turn
+  victoryPointsTarget: number   // score threshold to win; sourced from the map at game start
 }
 ```
 

@@ -89,9 +89,9 @@
     {
       "forPlayersCount": 2,
       "hexes": [
-        { "coords": { "q": -3, "r": 0, "s": 3 }, "active": false },
-        { "coords": { "q": 0, "r": 0, "s": 0 }, "active": true },
-        { "coords": { "q": 3, "r": 0, "s": -3 }, "active": false }
+        { "coords": { "q": -3, "r": 0, "s": 3 }, "isActive": false },
+        { "coords": { "q": 0, "r": 0, "s": 0 }, "isActive": true },
+        { "coords": { "q": 3, "r": 0, "s": -3 }, "isActive": false }
       ]
     }
   ],
