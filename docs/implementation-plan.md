@@ -106,28 +106,78 @@ Track `turnPhase` in state: `'FOCAL'` → `'ACTION'` → `'COMBAT'` → (auto-ad
 
 ## Phase 4 — Components (`src/components/`)
 
+Visual components are built as thin wrappers around **`style-guide-donjon-fall`**, which provides two libraries verified working in this project:
+
+| Library | Import path | Role |
+|---|---|---|
+| **TkajUI** | `style-guide-donjon-fall/tkajui` | Generic UI — `Button`, `Badge`, `Card`, `ButtonGroup`, etc. |
+| **Donjon** | `style-guide-donjon-fall/donjon` | Game UI — `HexTile`, `DieFace`, `DonjonButton`, `DonjonCard`, `FloatFeedback`, `PlayerIdentityBadge`, etc. |
+
+### Prerequisites (done)
+
+- `style-guide-donjon-fall` linked in `node_modules` (symlink to sibling repo)
+- Vite aliases in `vite.config.js` pointing at the library source (with React dedupe)
+- `@source` directive in `index.css` so Tailwind v4 scans library class names
+
+No custom SVG/CSS hex or die rendering — map game state to library props instead.
+
+### `playerColors.js`
+- Hardcoded palette for the two-player default game: `{ red: '#E05C5C', blue: '#4D8FE0' }`
+- Used by `Hex`, `Die`, and `ActionPanel` to pass `owner` / `playerColor` to library components
+
 ### `Board.jsx`
-- Renders all hex cells using pointy-top hex layout (pixel coordinates from cube coords)
-- Accepts `mapData`, `gameState`, `onHexClick` callback
-- Highlights: selected die/tower, reachable hexes, active focal points
+- Renders all hex cells using pointy-top hex layout (`hexToPixel` from `hex.js`)
+- Each cell is an absolutely positioned wrapper (see `DieOnHex` / `TowerOnHex` patterns in the style guide's `DicePage`)
+- Accepts `mapData`, `gameState`, interaction callbacks (`onHexClick`, `onDieClick`)
+- Derives per-hex highlight state and passes it to `Hex`
+- Highlights: selected die/tower, reachable hexes (move vs attack), active/passive focal points
 
 ### `Hex.jsx`
-- Single hex cell (SVG polygon or CSS clip-path)
-- Visual variants: normal, base (red/blue tint), focal point active, focal point passive
-- Renders dice/tower stack on top
+- Wraps `HexTile` from `style-guide-donjon-fall/donjon`
+- Maps game state → `HexTile` props:
+
+| Game condition | `HexTile` state | Notes |
+|---|---|---|
+| Normal empty hex | `empty` | |
+| Base hex | `base` | `owner` = player color |
+| Active focal point | `focal-active` | |
+| Passive focal point | `focal-passive` | |
+| Selected die/tower | `selected` | |
+| Reachable (non-combat) | `move` | |
+| Reachable (combat) | `attack` | |
+
+- Renders `Die` (single die) or `TowerStack` (2+ dice) centered on the hex
+- Optional `FloatFeedback` overlay for VP/scoring animations (positioned inside the hex wrapper)
 
 ### `Die.jsx`
-- Shows face value as large number
-- Color-coded by owner
-- Visual states: normal, selected, jumping (from turnContext)
+- Wraps `DieFace` from `style-guide-donjon-fall/donjon`
+- Props: `faceValue`, `owner`, visual `state`
+- Maps game state → `DieFace` props:
+
+| Game condition | `DieFace` state |
+|---|---|
+| Normal | `default` |
+| Selected | `selected` |
+| Jumping (from `turnContext`) | `selected` |
+| Just rerolled this turn | `rerolled` |
+| Combat-damaged (−1 face) | `damaged` |
+
+- Size: `xs` for md hex tiles (62×72); coordinate with `HexTile` size
+
+### `TowerStack.jsx`
+- Stacks multiple `DieFace` components with negative vertical offset (style guide `TowerStack` pattern)
+- Bottom die aligned to hex center; top die is the active/top-of-stack die
+- Size config (`box`, `peek`) must match die size ↔ hex size pairing from the style guide
 
 ### `ActionPanel.jsx`
-- Shows current player (red/blue)
-- Shows current turn phase
-- Shows each player's score
-- Buttons: `Reroll`, `Tower Collapse` (greyed if illegal)
-- Combat resolution panel: `Push` / `Occupy` buttons (only during `'COMBAT'` phase)
-- "End Turn" button (only shown after action is taken if no combat, or after combat resolved)
+- Built with Donjon/TkajUI components — no raw HTML buttons
+- `DonjonCard` as panel container
+- `PlayerIdentityBadge` (or `Shield`) for current player indicator
+- Score display per player (VP count; style guide `VPCounter` pattern as reference)
+- Turn phase label (Focal / Action / Combat)
+- Action buttons via `DonjonButton`: `Reroll`, `Tower Collapse` (disabled when illegal)
+- Combat resolution via `DonjonButtonGroup`: `Push` / `Occupy` (only during `'COMBAT'` phase)
+- "End Turn" via `DonjonButton` (shown after action if no combat pending, or after combat resolved)
 
 ---
 
@@ -165,10 +215,13 @@ No routing, no setup screen, no menus.
 5. `src/logic/focalPoints.js`
 6. `src/logic/actions.js`
 7. `src/context/GameContext.jsx`
-8. `src/components/Hex.jsx` + `Die.jsx`
-9. `src/components/Board.jsx`
-10. `src/components/ActionPanel.jsx`
-11. `src/App.jsx` wiring
+8. `style-guide-donjon-fall` integration — Vite aliases, Tailwind `@source`, smoke-test imports ✅
+9. `src/components/playerColors.js`
+10. `src/components/Die.jsx` + `TowerStack.jsx`
+11. `src/components/Hex.jsx`
+12. `src/components/Board.jsx`
+13. `src/components/ActionPanel.jsx`
+14. `src/App.jsx` wiring
 
 ---
 
@@ -176,5 +229,6 @@ No routing, no setup screen, no menus.
 
 - **Map image**: ✅ User will provide an image at implementation time; coordinates will be adjusted based on their feedback.
 - **Hex orientation**: ✅ pointy-top (vertex up/down, flat sides left/right). Documented in architecture.md.
-- **Die visual**: ✅ Pip dots.
+- **Die visual**: ✅ `DieFace` from `style-guide-donjon-fall/donjon` — pip dots, owner-colored octagon.
+- **UI library**: ✅ Both `tkajui` and `donjon` packages verified working; Vite aliases + Tailwind `@source` configured.
 - **Starting face values**: ✅ The map JSON supplies a preset configuration (via `Die.faceValue` in base group definitions). `GameProvider` accepts a `randomizeDice` prop (boolean); when `true` one player's values are randomized and mirrored, when `false` the map's preset is used. For this phase, both modes are wired up and the prop is set on `App`.
