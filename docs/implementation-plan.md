@@ -121,9 +121,7 @@ Visual components are built as thin wrappers around **`style-guide-donjon-fall`*
 
 No custom SVG/CSS hex or die rendering — map game state to library props instead.
 
-### `playerColors.js`
-- Hardcoded palette for the two-player default game: `{ red: '#E05C5C', blue: '#4D8FE0' }`
-- Used by `Hex`, `Die`, and `ActionPanel` to pass `owner` / `playerColor` to library components
+Player colors come from the Donjon library (not defined in this repo). Use the exported palette / lookup (e.g. by player slot index) when passing `owner` to `HexTile` or `playerColor` to `DieFace`. Map game player IDs (`"red"`, `"blue"`) to slot indices via `turnOrder`.
 
 ### `Board.jsx`
 - Renders all hex cells using pointy-top hex layout (`hexToPixel` from `hex.js`)
@@ -216,7 +214,7 @@ No routing, no setup screen, no menus.
 6. `src/logic/actions.js`
 7. `src/context/GameContext.jsx`
 8. `style-guide-donjon-fall` integration — Vite aliases, Tailwind `@source`, smoke-test imports ✅
-9. `src/components/playerColors.js`
+9. Player color export in `style-guide-donjon-fall/donjon` (if not yet exported — add to library, then import here)
 10. `src/components/Die.jsx` + `TowerStack.jsx`
 11. `src/components/Hex.jsx`
 12. `src/components/Board.jsx`
