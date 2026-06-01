@@ -5,7 +5,7 @@ import { getLegalActions } from "../logic/actions.js";
 import Hex from "./Hex.jsx";
 import { getOwnerColor, hexDims } from "./hexLayout.js";
 
-const HEX_LAYOUT_SIZE = 32;
+const HEX_LAYOUT_SIZE = hexDims.md.h / 2;
 const HEX_SIZE = "md";
 const DIE_SIZE = "xs";
 
