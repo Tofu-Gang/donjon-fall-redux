@@ -21,7 +21,7 @@ export default function Hex({
     dice = [],
     hexSize = "md",
     dieSize = "xs",
-    onDieClick,
+    onClickAt,
     getDieState,
 }) {
     // Resolve hex dimensions with a safe fallback to "md" if an unknown size is passed.
@@ -55,12 +55,11 @@ export default function Hex({
             onClick={(event) => {
                 // Empty hexes have nothing to click — let the click bubble up to the board.
                 if (dice.length === 0) return;
-                // Always select the die with the highest stackIndex (the one visually on top).
-                const top = dice.reduce((best, die) =>
-                    die.stackIndex > best.stackIndex ? die : best, dice[0]);
-                // Prevent the click from also registering as a hex click on the board.
+                // Treat the click as a click on this hex so the parent handler can
+                // first try a legal move to the top die here, and only fall back to selection.
+                // Prevent the click from also registering as a click on the board.
                 event.stopPropagation();
-                onDieClick?.(top.id);
+                onClickAt?.(dice[0].coords);
             }}
         >
             {/* The styled hex tile behind everything else (state = selected/attack/move/focal/base/empty). */}

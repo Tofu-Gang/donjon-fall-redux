@@ -41,35 +41,19 @@ export default function GameView() {
     }, [state.turnPhase, state.currentTurnIndex, winner, evaluateFocalPoints]);
 
     /**
-     * Select a die owned by the active player that is on top of its stack.
-     * Buried dice (not on top of their hex) are rejected so the player can't
-     * act on dice they can't see.
+     * Click handler shared by hexes and dice: tries a legal move to the clicked
+     * hex first, then falls back to selecting the top friendly die there.
+     * Die clicks and empty-hex clicks both go through this path so clicking a
+     * friendly die as a move target actually performs the move (instead of
+     * just selecting that die).
      *
-     * @param {string} dieId - Id of the die to select.
-     */
-    const handleSelectDie = useCallback((dieId) => {
-        const die = state.dice[dieId];
-        // Only the active player may select their own dice
-        if (!die || die.owner !== activePlayer) return;
-        // Must be the top die on the hex — buried dice cannot be acted on
-        const top = getTopDie(state.dice, die.coords);
-        if (!top || top.id !== dieId) return;
-        setSelectedDieId(dieId);
-        setTowerMoveMode(false); // Single-die selection clears tower-move mode
-    }, [state.dice, activePlayer]);
-
-    /**
-     * Hex click handler during the ACTION phase:
-     * 1. If a legal move to this hex exists, perform it.
-     * 2. Otherwise, select the top friendly die on this hex (if any).
-     *
-     * @param {string} key - Hex key of the clicked hex.
      * @param {object} coords - Axial coords of the clicked hex.
      */
-    const handleHexClick = useCallback((key, coords) => {
+    const handleHexClick = useCallback((coords) => {
         // Actions are only allowed once per turn, during the ACTION phase
         if (state.turnPhase !== "ACTION" || state.actionTaken) return;
 
+        const key = hexKey(coords);
         const legal = getLegalActions(state, mapHexSet);
         const selectedDie = selectedDieId ? state.dice[selectedDieId] : null;
 
@@ -97,7 +81,8 @@ export default function GameView() {
         // No move matched — treat click as die selection on this hex
         const top = getTopDie(state.dice, coords);
         if (top && top.owner === activePlayer) {
-            handleSelectDie(top.id);
+            setSelectedDieId(top.id);
+            setTowerMoveMode(false); // Single-die selection clears tower-move mode
         }
     }, [
         state,
@@ -106,7 +91,6 @@ export default function GameView() {
         towerMoveMode,
         activePlayer,
         performAction,
-        handleSelectDie,
     ]);
 
     /**
@@ -150,14 +134,13 @@ export default function GameView() {
                     endTurn();
                 }}
             />
-            {/* Interactive hex grid; hex clicks route through handleHexClick */}
+            {/* Interactive hex grid; clicks on dice and empty hexes share one handler. */}
             <Board
                 mapData={mapData}
                 state={state}
                 mapHexSet={mapHexSet}
                 selectedDieId={selectedDieId}
                 towerMoveMode={towerMoveMode}
-                onSelectDie={handleSelectDie}
                 onHexClick={handleHexClick}
             />
         </div>

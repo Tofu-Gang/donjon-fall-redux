@@ -20,7 +20,6 @@ export default function Board({
     mapHexSet,
     selectedDieId,
     towerMoveMode,
-    onSelectDie,
     onHexClick,
 }) {
     // Player whose turn it is (derived from turn order and current index)
@@ -152,7 +151,7 @@ export default function Board({
                             left: pixel.x + layout.offsetX - hexDims[HEX_SIZE].w / 2,
                             top: pixel.y + layout.offsetY - hexDims[HEX_SIZE].h / 2,
                         }}
-                        onClick={() => onHexClick?.(key, coords)}
+                        onClick={() => onHexClick?.(coords)}
                     >
                         <Hex
                             tileState={tileState}
@@ -160,7 +159,7 @@ export default function Board({
                             dice={dice}
                             hexSize={HEX_SIZE}
                             dieSize={DIE_SIZE}
-                            onDieClick={onSelectDie}
+                            onClickAt={onHexClick}
                             getDieState={(die) =>
                                 die.id === selectedDieId ? "selected" : "default"
                             }
