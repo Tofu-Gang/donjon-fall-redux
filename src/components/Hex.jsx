@@ -16,8 +16,10 @@ const towerSizeConfig = {
  * Stacks of 2+ dice are rendered via TowerStack; a single die is rendered directly. Empty hexes just show the tile.
  */
 export default function Hex({
-    tileState = "empty",
-    ownerColor = null,
+    property = "empty",
+    focal,
+    state = "default",
+    owner = null,
     dice = [],
     hexSize = "md",
     dieSize = "xs",
@@ -62,8 +64,13 @@ export default function Hex({
                 onClickAt?.(dice[0].coords);
             }}
         >
-            {/* The styled hex tile behind everything else (state = selected/attack/move/focal/base/empty). */}
-            <HexTile state={tileState} owner={ownerColor} size={hexSize} />
+            <HexTile
+                property={property}
+                focal={property === "focal" ? focal : undefined}
+                state={state}
+                owner={owner}
+                size={hexSize}
+            />
             {dieOverlay && (
                 <div
                     style={{

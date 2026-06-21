@@ -37,11 +37,11 @@ export default function Board({
                 bases[hexKey(baseHex.coords)] = getOwnerColor(owner);
             }
         });
-        // Map each focal-point hex key to its current active/passive tile state.
+        // Map each focal-point hex key to its active/passive game-state.
         const focal = {};
         for (const group of Object.values(state.focalPointsGroups)) {
             for (const fp of group) {
-                focal[hexKey(fp.coords)] = fp.isActive ? "focal-active" : "focal-passive";
+                focal[hexKey(fp.coords)] = fp.isActive ? "active" : "passive";
             }
         }
         return { baseHexOwners: bases, focalByKey: focal };
@@ -127,20 +127,27 @@ export default function Board({
             {layout.positions.map(({ key, pixel }) => {
                 const coords = hexCoords(key);
                 const dice = getDiceAtHex(state.dice, coords);
-                const isBase = key in baseHexOwners;
-                // Pick the most important state to display, in priority order:
-                // selected > attack > move > focal > base > empty.
-                let tileState = "empty";
+                // HexTile uses three axes: property (what the cell is), focal sub-state,
+                // and interaction state (selected / move / attack). These compose instead
+                // of replacing each other.
+                let property = "empty";
+                let focal;
+                let owner = null;
+                if (key in focalByKey) {
+                    property = "focal";
+                    focal = focalByKey[key];
+                } else if (key in baseHexOwners) {
+                    property = "base";
+                    owner = baseHexOwners[key];
+                }
+
+                let interactionState = "default";
                 if (key === selectedHexKey) {
-                    tileState = "selected";
+                    interactionState = "selected";
                 } else if (reachable.attack.has(key)) {
-                    tileState = "attack";
+                    interactionState = "attack";
                 } else if (reachable.move.has(key)) {
-                    tileState = "move";
-                } else if (key in focalByKey) {
-                    tileState = focalByKey[key];
-                } else if (isBase) {
-                    tileState = "base";
+                    interactionState = "move";
                 }
 
                 return (
@@ -154,8 +161,10 @@ export default function Board({
                         onClick={() => onHexClick?.(coords)}
                     >
                         <Hex
-                            tileState={tileState}
-                            ownerColor={isBase ? baseHexOwners[key] : null}
+                            property={property}
+                            focal={focal}
+                            state={interactionState}
+                            owner={owner}
                             dice={dice}
                             hexSize={HEX_SIZE}
                             dieSize={DIE_SIZE}
