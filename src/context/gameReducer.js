@@ -6,10 +6,22 @@ import { hexKey } from "../logic/hex.js";
 import { isGameOver } from "../logic/actions.js";
 import mapDataDefault from "../maps/default.json";
 
+/**
+ * Returns a fair d6 roll in [1, 6]. Extracted so tests can inject a deterministic rollFn.
+ *
+ * @returns {number} Integer from 1 to 6 inclusive.
+ */
 export function rollD6() {
     return Math.floor(Math.random() * 6) + 1;
 }
 
+/**
+ * Builds a Set of all valid hex keys on the map: plain hexes + every base + every focal point.
+ * Used by the reducer and legal-action logic to cheaply check hex membership.
+ *
+ * @param {object} mapData - Map definition (hexes, baseGroups, focalPointsGroups).
+ * @returns {Set<string>} Set of hex keys, one per hex on the board.
+ */
 export function buildMapHexSet(mapData) {
     const set = new Set();
     for (const hex of mapData.hexes) set.add(hexKey(hex));
@@ -24,8 +36,19 @@ export function buildMapHexSet(mapData) {
     return set;
 }
 
+/**
+ * Builds the initial game state from a map definition. When randomizeDice is true,
+ * each base die is rolled fresh; otherwise its starting face value comes from the map.
+ * rollFn is injectable so tests can pin the initial dice values.
+ *
+ * @param {object} mapData - Map definition.
+ * @param {boolean} randomizeDice - When true, dice start with random face values instead of map defaults.
+ * @param {() => number} [rollFn=rollD6] - Injectable RNG used when randomizeDice is true.
+ * @returns {object} The initial state object.
+ */
 export function buildInitialState(mapData, randomizeDice, rollFn = rollD6) {
     const playerCount = 2;
+    // Two-player setup: take only the base/focal/target groups declared for 2 players.
     const baseGroups = mapData.baseGroups.filter(
         baseGroup => baseGroup.forPlayersCount === playerCount);
     const firstBaseHexes = baseGroups[0].hexes;
@@ -39,6 +62,7 @@ export function buildInitialState(mapData, randomizeDice, rollFn = rollD6) {
 
     const dice = {};
 
+    // Player 1 (red) — place each die at its base hex with its configured stack index.
     for (let hexIdx = 0; hexIdx < firstBaseHexes.length; hexIdx++) {
         const baseHex = firstBaseHexes[hexIdx];
         for (let dieIdx = 0; dieIdx < baseHex.dice.length; dieIdx++) {
@@ -53,6 +77,8 @@ export function buildInitialState(mapData, randomizeDice, rollFn = rollD6) {
         }
     }
 
+    // Player 2 (blue) — same shape as red, but uses the static face values from the map.
+    // (Blue's starting faces are not rolled even when randomizeDice is true; that's intentional.)
     for (let hexIdx = 0; hexIdx < secondBaseHexes.length; hexIdx++) {
         const baseHex = secondBaseHexes[hexIdx];
         for (let dieIdx = 0; dieIdx < baseHex.dice.length; dieIdx++) {
@@ -67,6 +93,7 @@ export function buildInitialState(mapData, randomizeDice, rollFn = rollD6) {
         }
     }
 
+    // Focal-point groups are keyed by group index (string) so the lookup in Board.jsx can use Object.values.
     const mapFocalPointsGroups = mapData.focalPointsGroups.filter(
         focalPointsGroup => focalPointsGroup.forPlayersCount === playerCount);
     const focalPointsGroups = {};
@@ -77,6 +104,7 @@ export function buildInitialState(mapData, randomizeDice, rollFn = rollD6) {
         }));
     });
 
+    // VP target defaults to 5 when the map doesn't specify one for 2 players.
     const victoryPointsTargets = mapData.victoryPointsTargets.filter(
         victoryPointsTarget => victoryPointsTarget.forPlayersCount === playerCount);
     const victoryPointsTarget = victoryPointsTargets[0]?.target ?? 5;
@@ -95,10 +123,20 @@ export function buildInitialState(mapData, randomizeDice, rollFn = rollD6) {
     };
 }
 
+/**
+ * Dispatches a player action (REROLL / TOWER_COLLAPSE / MOVE_DIE / MOVE_TOWER) and returns the new state.
+ * Moving into an enemy-occupied hex transitions the turn into the COMBAT phase instead of moving immediately.
+ *
+ * @param {object} state - Current game state.
+ * @param {object} gameAction - Action to apply (typed by `type`).
+ * @param {() => number} [rollFn=rollD6] - Injectable RNG used for REROLL.
+ * @returns {object} Next game state (or the input state unchanged for unknown actions).
+ */
 export function applyGameAction(state, gameAction, rollFn = rollD6) {
     const { dice } = state;
     const activePlayer = state.turnOrder[state.currentTurnIndex];
 
+    // REROLL: re-roll the chosen die but keep whichever face is higher (never makes a die worse).
     if (gameAction.type === "REROLL") {
         const die = dice[gameAction.dieId];
         const newValue = Math.max(rollFn(), die.faceValue);
@@ -109,6 +147,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
         };
     }
 
+    // TOWER_COLLAPSE: removes the bottom die of the stack and awards a VP if it was an enemy die.
     if (gameAction.type === "TOWER_COLLAPSE") {
         const stack = getDiceAtHex(dice, gameAction.coords);
         const bottomDie = stack[0];
@@ -121,6 +160,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
         return { ...state, dice: newDice, players, actionTaken: true };
     }
 
+    // MOVE_DIE: walks the die along its path; entering an enemy hex opens combat instead of completing the move.
     if (gameAction.type === "MOVE_DIE") {
         const { dieId, path } = gameAction;
         const die = dice[dieId];
@@ -129,6 +169,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
         const isCombatTarget = targetTop !== null && targetTop.owner !== activePlayer;
 
         if (isCombatTarget) {
+            // Park in COMBAT phase with the pending combat describing attacker/defender coords.
             return {
                 ...state,
                 turnPhase: "COMBAT",
@@ -142,6 +183,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
             };
         }
 
+        // Peaceful move: place the die on top of whatever is at the destination.
         const newStackIndex = getNextStackIndex(dice, targetCoords);
         return {
             ...state,
@@ -150,6 +192,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
         };
     }
 
+    // MOVE_TOWER: like MOVE_DIE, but moves the entire stack in one shot.
     if (gameAction.type === "MOVE_TOWER") {
         const { coords, path } = gameAction;
         const targetCoords = path[path.length - 1];
@@ -158,6 +201,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
         const isCombatTarget = targetTop !== null && targetTop.owner !== activePlayer;
 
         if (isCombatTarget) {
+            // For tower attacks, the attacker is the top die of the moving stack.
             const topDie = stack[stack.length - 1];
             return {
                 ...state,
@@ -172,6 +216,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
             };
         }
 
+        // Peaceful tower move: relocate every die in the stack to the new hex, preserving relative order.
         const newDice = { ...dice };
         for (const die of stack) {
             newDice[die.id] = { ...die, coords: targetCoords };
@@ -179,14 +224,26 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
         return { ...state, dice: newDice, actionTaken: true };
     }
 
+    // Unknown action type is a no-op; the UI is the source of truth for valid actions.
     return state;
 }
 
+/**
+ * Resolves a pending combat by applying either PUSH or OCCUPY, then returns to the ACTION phase.
+ * PUSH may yield bonus VP for pushing a defender off the board; OCCUPY swaps ownership of the destination hex.
+ *
+ * @param {object} state - Current game state (must have a pendingCombat).
+ * @param {"PUSH" | "OCCUPY"} resolution - Chosen combat outcome.
+ * @param {Set<string>} mapHexSet - Set of valid hex keys, used to detect push-off-board.
+ * @param {() => number} [rollFn=rollD6] - Injectable RNG used during combat.
+ * @returns {object} Next game state with the combat cleared and phase back to ACTION.
+ */
 export function applyCombatResolution(state, resolution, mapHexSet, rollFn = rollD6) {
     const { pendingCombat, dice } = state;
     const { attackerDieId, attackerCoords, defenderCoords } = pendingCombat;
     const activePlayer = state.turnOrder[state.currentTurnIndex];
 
+    // Phase 1 (combat dice rolling, etc.) runs for both resolutions before branching.
     let newDice = resolveCombatPhase1(dice, attackerCoords);
     let extraPoints = 0;
 
@@ -200,6 +257,7 @@ export function applyCombatResolution(state, resolution, mapHexSet, rollFn = rol
         newDice = resolveCombatOccupy(newDice, attackerDieId, attackerCoords, defenderCoords);
     }
 
+    // Award any extra VP earned from the push; OCCUPY never awards points directly here.
     const players = extraPoints > 0
         ? { ...state.players, [activePlayer]: state.players[activePlayer] + extraPoints }
         : state.players;
@@ -213,17 +271,28 @@ export function applyCombatResolution(state, resolution, mapHexSet, rollFn = rol
     };
 }
 
+/**
+ * Creates a reducer bound to a specific map (for hex membership checks) and an optional RNG.
+ *
+ * @param {Set<string>} mapHexSet - Valid hex keys, used by combat resolution.
+ * @param {() => number} [rollFn=rollD6] - Injectable RNG shared across the reducer.
+ * @returns {(state: object, action: object) => object} Pure reducer for the game state.
+ */
 export function createReducer(mapHexSet, rollFn = rollD6) {
     return function reducer(state, action) {
         switch (action.type) {
+            // Run focal-point scoring at the start of each turn, then drop back into ACTION.
             case "EVALUATE_FOCAL_POINTS": {
                 const { newState } = evaluateFocalPoints(state, rollFn);
                 return { ...newState, turnPhase: "ACTION", actionTaken: false };
             }
+            // Forward player actions to the pure applyGameAction helper.
             case "PERFORM_ACTION":
                 return applyGameAction(state, action.gameAction, rollFn);
+            // Resolve a pending combat (PUSH or OCCUPY) using the bound map + RNG.
             case "RESOLVE_COMBAT":
                 return applyCombatResolution(state, action.resolution, mapHexSet, rollFn);
+            // Advance to the next player in turn order; reset per-turn state and start a new FOCAL phase.
             case "END_TURN": {
                 const nextIndex = (state.currentTurnIndex + 1) % state.turnOrder.length;
                 return {
@@ -235,10 +304,15 @@ export function createReducer(mapHexSet, rollFn = rollD6) {
                     actionTaken: false,
                 };
             }
+            // Unknown actions are ignored — keeps the reducer pure and easy to extend.
             default:
                 return state;
         }
     };
 }
 
+/**
+ * Re-exported so consumers can `import { isGameOver, mapDataDefault } from "...gameReducer"`.
+ * mapDataDefault powers the no-args form of GameProvider; isGameOver is the canonical win check.
+ */
 export { isGameOver, mapDataDefault };
