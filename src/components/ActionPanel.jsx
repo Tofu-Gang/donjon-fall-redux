@@ -109,24 +109,17 @@ export default function ActionPanel({
 
                     {/* Combat phase: present PUSH always; OCCUPY only when the attacker is a lone die */}
                     {inCombat && (
-                        <DonjonButtonGroup>
-                            <DonjonButton
-                                variant="default"
-                                size="sm"
-                                onClick={onPush}
-                            >
-                                Push
-                            </DonjonButton>
-                            {!isTowerAttack && (
-                                <DonjonButton
-                                    variant="success"
-                                    size="sm"
-                                    onClick={onOccupy}
-                                >
-                                    Occupy
-                                </DonjonButton>
-                            )}
-                        </DonjonButtonGroup>
+                        <DonjonButtonGroup
+                            size="sm"
+                            items={[
+                                { value: "push", label: "Push" },
+                                ...(isTowerAttack ? [] : [{ value: "occupy", label: "Occupy" }]),
+                            ]}
+                            onChange={(choice) => {
+                                if (choice === "push") onPush();
+                                else if (choice === "occupy") onOccupy();
+                            }}
+                        />
                     )}
 
                     {/* ACTION phase, before an action has been taken: reroll / tower-move toggle / collapse */}
