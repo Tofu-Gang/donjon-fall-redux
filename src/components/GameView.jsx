@@ -83,6 +83,11 @@ export default function GameView() {
         if (top && top.owner === activePlayer) {
             setSelectedDieId(top.id);
             setTowerMoveMode(false); // Single-die selection clears tower-move mode
+        } else if (state.turnPhase === "ACTION" && !state.actionTaken) {
+            // Clicked a hex that isn't a legal move target and holds no friendly
+            // die — treat as a deselect, mirroring an outside-board click.
+            setSelectedDieId(null);
+            setTowerMoveMode(false);
         }
     }, [
         state,
@@ -92,6 +97,18 @@ export default function GameView() {
         activePlayer,
         performAction,
     ]);
+
+    /**
+     * Click landed on the page background (anywhere not inside ActionPanel or
+     * Board). The flex root's items-center + p-4 puts the children centered
+     * with empty space around them; that empty space is part of this root, so
+     * the target === currentTarget guard fires only for genuine background clicks.
+     */
+    const handleBackgroundClick = useCallback((event) => {
+        if (event.target !== event.currentTarget) return;
+        setSelectedDieId(null);
+        setTowerMoveMode(false);
+    }, []);
 
     /**
      * Reroll the selected die (uses the player's one action for the turn).
@@ -114,7 +131,10 @@ export default function GameView() {
     }, [selectedDieId, state.dice, performAction]);
 
     return (
-        <div className="flex min-h-screen flex-col items-center gap-6 p-4">
+        <div
+            className="flex min-h-screen flex-col items-center gap-6 p-4"
+            onClick={handleBackgroundClick}
+        >
             {/* Turn status, action buttons, combat choices, end-turn */}
             <ActionPanel
                 state={state}
