@@ -5,7 +5,10 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
-const styleGuide = resolve(rootDir, "node_modules/style-guide-donjon-fall");
+// The style-guide is a sibling repo developed in parallel; it isn't published
+// to npm, so we point the alias directly at its real path on disk. This keeps
+// `npm i` from being able to break the link by pruning node_modules.
+const styleGuide = resolve(rootDir, "..", "Style-guite-donjon-fall");
 
 // https://vite.dev/config/
 export default defineConfig({
