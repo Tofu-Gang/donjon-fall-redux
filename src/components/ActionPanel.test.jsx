@@ -44,7 +44,6 @@ describe("ActionPanel — combat choices", () => {
                 onTowerCollapse={() => {}}
                 onPush={onPush}
                 onOccupy={onOccupy}
-                onEndTurn={() => {}}
             />
         );
 
@@ -78,7 +77,6 @@ describe("ActionPanel — combat choices", () => {
                 onTowerCollapse={() => {}}
                 onPush={() => {}}
                 onOccupy={() => {}}
-                onEndTurn={() => {}}
             />
         );
 

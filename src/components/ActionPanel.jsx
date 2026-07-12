@@ -8,7 +8,6 @@ import {
     playerColorsByKey,
     DonjonModal,
     TowerCollapseIcon,
-    HourglassIcon,
 } from "style-guide-donjon-fall/donjon";
 import { getLegalActions } from "../logic/actions.js";
 import { isTower, isTowerCollapsible } from "../logic/dice.js";
@@ -23,7 +22,7 @@ const TURN_PHASES = [
 const PLAYER_LABELS = { red: "Red", blue: "Blue" };
 
 /**
- * Side panel that shows turn status, action buttons, combat choices, and the end-turn control.
+ * Side panel that shows turn status, action buttons, and combat choices.
  * Receives callbacks from GameView; never dispatches directly — all state changes flow through props.
  */
 export default function ActionPanel({
@@ -38,7 +37,6 @@ export default function ActionPanel({
     onTowerCollapse,
     onPush,
     onOccupy,
-    onEndTurn,
 }) {
     // Player whose turn it is (derived from turn order and current index)
     const activePlayer = state.turnOrder[state.currentTurnIndex];
@@ -57,10 +55,6 @@ export default function ActionPanel({
     const canTowerMove = selectedCoords
         && isTower(state.dice, selectedCoords)
         && legal.some((a) => a.type === "MOVE_TOWER" && hexKey(a.coords) === hexKey(selectedCoords));
-    // End-turn is only available after an action has been taken and no combat is awaiting resolution
-    const showEndTurn = state.turnPhase === "ACTION"
-        && state.actionTaken
-        && !state.pendingCombat;
     // Combat UI shows when phase is COMBAT and a pending combat exists
     const inCombat = state.turnPhase === "COMBAT" && state.pendingCombat;
     // OCCUPY is only legal for lone-die attackers; tower attackers are pushed-only
@@ -153,16 +147,6 @@ export default function ActionPanel({
                                 </span>
                             </DonjonButton>
                         </div>
-                    )}
-
-                    {/* After action is taken and no combat is pending, surface End Turn */}
-                    {showEndTurn && (
-                        <DonjonButton size="md" onClick={onEndTurn}>
-                            <span className="inline-flex items-center gap-2">
-                                <HourglassIcon size={16} />
-                                End Turn
-                            </span>
-                        </DonjonButton>
                     )}
 
                     {/* FOCAL phase has no user input — show a placeholder while the scoring runs */}

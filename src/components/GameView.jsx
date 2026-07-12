@@ -40,6 +40,18 @@ export default function GameView() {
         }
     }, [state.turnPhase, state.currentTurnIndex, winner, evaluateFocalPoints]);
 
+    // Once the action is fully resolved (taken, no pending combat, back in ACTION),
+    // hand the turn over to the next player — no manual End Turn click required.
+    useEffect(() => {
+        if (winner) return; // Game over — let the modal stand
+        const actionDone = state.turnPhase === "ACTION"
+            && state.actionTaken
+            && !state.pendingCombat;
+        if (actionDone) {
+            endTurn();
+        }
+    }, [state.turnPhase, state.actionTaken, state.pendingCombat, state.currentTurnIndex, winner, endTurn]);
+
     /**
      * Click handler shared by hexes and dice: tries a legal move to the clicked
      * hex first, then falls back to selecting the top friendly die there.
@@ -135,7 +147,7 @@ export default function GameView() {
             className="flex min-h-screen flex-col items-center gap-6 p-4"
             onClick={handleBackgroundClick}
         >
-            {/* Turn status, action buttons, combat choices, end-turn */}
+            {/* Turn status, action buttons, and combat choices (turn ends automatically) */}
             <ActionPanel
                 state={state}
                 mapHexSet={mapHexSet}
@@ -148,11 +160,6 @@ export default function GameView() {
                 onTowerCollapse={handleTowerCollapse}
                 onPush={() => resolveCombat("PUSH")}
                 onOccupy={() => resolveCombat("OCCUPY")}
-                onEndTurn={() => {
-                    setSelectedDieId(null);
-                    setTowerMoveMode(false);
-                    endTurn();
-                }}
             />
             {/* Interactive hex grid; clicks on dice and empty hexes share one handler. */}
             <Board
