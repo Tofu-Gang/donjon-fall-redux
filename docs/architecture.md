@@ -116,11 +116,15 @@ Game state is held in a React context. Only the minimal mutable data is stored. 
 
   // Ephemeral turn context — null when no special state is active
   turnContext: {
-    // Set when a die jumps off a tower; cleared at turn end or when the
-    // die moves outside the original tower movement range
+    // Set when a die jumps off one or more towers during Move Die;
+    // cleared only at END_TURN. Each bonus is independent (hex distance).
     jumpContext: {
       dieId: string,
-      retainedPower: number
+      bonuses: Array<{
+        originCoords: HexCoords,
+        bonus: number,          // S − E under the mover at jump time
+        retainedRange: number   // max(O − E, 1) before the die left
+      }>
     } | null
   } | null,
 
@@ -180,7 +184,15 @@ combatPower = F + S − E
 - `S` = count of dice on the same hex with the same owner as the top die, excluding the top die itself
 - `E` = count of dice on the same hex with a different owner than the top die
 
-For a die currently jumping off a tower: use `retainedPower` as combat power if the die is within the tower movement range calculated **before the jump** (derived from the tower's position and `retainedPower`). Outside that range, combat power reverts to face value (lone die rule).
+For a die currently jumping (alone on a hex, with `jumpContext` for that die):
+
+```
+combatPower = F + Σ bonusᵢ
+```
+
+where each `bonusᵢ` is `S − E` from a tower left during this turn and still applies
+when hex distance from that tower's origin ≤ that tower's pre-jump `max(O − E, 1)`.
+Bonuses stack; leaving one tower's range drops only that bonus.
 
 ### Movement range
 
@@ -188,7 +200,7 @@ For a lone die: movement range = face value.
 
 For the top die of a tower: movement range = face value (not combat power).
 
-For a jumping die: movement range = face value (same as any tower top die). `retainedPower` affects combat power only, not movement range.
+For a jumping die: movement range = face value (same as any tower top die). Jump bonuses affect combat power only, not movement range.
 
 For a tower moving as a whole:
 
@@ -204,7 +216,7 @@ movementRange = max(O − E, 1)
 A single die moving along a path:
 - Cannot pass through enemy dice/towers.
 - Can pass through or stop on a friendly die/tower only if the moving die's combat power exceeds the combat power of the die/tower being passed through.
-- Passing through a friendly die/tower is treated as forming a temporary tower at that point; the remaining movement continues as if jumping off that tower. No extra movement is granted — steps already taken still count. This triggers `jumpContext` for the remainder of the move.
+- Passing through a friendly die/tower stacks the mover on top; the remaining movement continues as if jumping off that tower (append that tower's `S − E` bonus and range). No extra movement is granted — steps already taken still count. This updates `jumpContext` for the remainder of the turn.
 
 Towers moving as a whole cannot pass through or stop on any dice/towers (friendly or enemy).
 

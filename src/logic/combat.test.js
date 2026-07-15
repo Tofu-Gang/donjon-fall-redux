@@ -2,6 +2,8 @@ import {describe, it, expect} from "vitest";
 import {
     getCombatPower,
     getMovementRange,
+    effectiveJumpCombatPower,
+    buildJumpContextAlongPath,
     resolveCombatPhase1,
     resolveCombatPush,
     resolveCombatOccupy,
@@ -79,6 +81,104 @@ describe("getCombatPower", () => {
             makeDie("top", 0, 0, 0, 2, "red", 1),
         );
         expect(getCombatPower(dice, H0)).toBe(-1);
+    });
+
+    it("returns face + active bonuses for a jumping die within retained range", () => {
+        // Tower bonus +1, range 2 from H0; face 4 → CP 5 at H1 and H2.
+        const dice = makeDice(makeDie("r2", 1, -1, 0, 0, "red", 4));
+        const turnContext = {
+            jumpContext: {
+                dieId: "r2",
+                bonuses: [{ originCoords: H0, bonus: 1, retainedRange: 2 }],
+            },
+        };
+        const atH2 = { ...dice, r2: { ...dice.r2, coords: H2 } };
+        expect(getCombatPower(dice, H1, turnContext)).toBe(5);
+        expect(getCombatPower(atH2, H2, turnContext)).toBe(5);
+    });
+
+    it("reverts to face value when a jumping die exits all retained ranges", () => {
+        const dice = makeDice(makeDie("r2", 3, -3, 0, 0, "red", 4));
+        const turnContext = {
+            jumpContext: {
+                dieId: "r2",
+                bonuses: [{ originCoords: H0, bonus: 1, retainedRange: 2 }],
+            },
+        };
+        expect(getCombatPower(dice, H3, turnContext)).toBe(4);
+    });
+
+    it("stacks multiple bonuses and drops them independently by distance", () => {
+        // T1 at H1 (+3, range 4); T2 at H2 (+1, range 2). Face 6.
+        // H4: both → 10; H5: only T1 → 9; H6: none → 6.
+        const H4 = { q: 4, r: -4, s: 0 };
+        const H5 = { q: 5, r: -5, s: 0 };
+        const H6 = { q: 6, r: -6, s: 0 };
+        const bonuses = [
+            { originCoords: H1, bonus: 3, retainedRange: 4 },
+            { originCoords: H2, bonus: 1, retainedRange: 2 },
+        ];
+        expect(effectiveJumpCombatPower(6, bonuses, H4)).toBe(10);
+        expect(effectiveJumpCombatPower(6, bonuses, H5)).toBe(9);
+        expect(effectiveJumpCombatPower(6, bonuses, H6)).toBe(6);
+    });
+
+    it("ignores jumpContext for a die that is not the jumping one", () => {
+        const dice = makeDice(
+            makeDie("bot",  0, 0, 0, 0, "red", 2),
+            makeDie("r2",   0, 0, 0, 1, "red", 4),
+            makeDie("other", 0, 0, 0, 2, "red", 1),
+        );
+        const turnContext = {
+            jumpContext: {
+                dieId: "r2",
+                bonuses: [{ originCoords: H0, bonus: 1, retainedRange: 2 }],
+            },
+        };
+        // top is "other" → normal tower 1+2 = 3
+        expect(getCombatPower(dice, H0, turnContext)).toBe(3);
+    });
+
+    it("ignores jumpContext when the jumping die is top of a multi-die stack", () => {
+        // r2 stopped on a friendly: normal F+S−E, not jump formula.
+        const dice = makeDice(
+            makeDie("bot", 1, -1, 0, 0, "red", 1),
+            makeDie("r2",  1, -1, 0, 1, "red", 4),
+        );
+        const turnContext = {
+            jumpContext: {
+                dieId: "r2",
+                bonuses: [{ originCoords: H0, bonus: 1, retainedRange: 2 }],
+            },
+        };
+        expect(getCombatPower(dice, H1, turnContext)).toBe(5);
+    });
+
+    it("ignores jumpContext when turnContext is null (default behavior)", () => {
+        const dice = makeDice(
+            makeDie("bot", 0, 0, 0, 0, "red", 2),
+            makeDie("r2",  0, 0, 0, 1, "red", 4),
+        );
+        expect(getCombatPower(dice, H0)).toBe(5);
+    });
+
+    it("buildJumpContextAlongPath seeds start tower and appends landings", () => {
+        const dice = makeDice(
+            makeDie("r1", 0, 0, 0, 0, "red", 3),
+            makeDie("r2", 0, 0, 0, 1, "red", 4),
+            makeDie("r3", 1, -1, 0, 0, "red", 1),
+        );
+        const ctx = buildJumpContextAlongPath(
+            dice,
+            "r2",
+            [H0, H1, H2],
+            "red",
+        );
+        expect(ctx?.jumpContext?.dieId).toBe("r2");
+        expect(ctx?.jumpContext?.bonuses).toEqual([
+            { originCoords: H0, bonus: 1, retainedRange: 2 },
+            { originCoords: H1, bonus: 1, retainedRange: 2 },
+        ]);
     });
 });
 

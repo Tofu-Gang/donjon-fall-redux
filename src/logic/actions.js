@@ -5,29 +5,53 @@
 
 import { hexKey, hexNeighbors } from "./hex.js";
 import { getTopDie, isTower, isTowerCollapsible } from "./dice.js";
-import { getCombatPower, getMovementRange } from "./combat.js";
+import {
+    getCombatPower,
+    getMovementRange,
+    effectiveJumpCombatPower,
+    jumpBonusFromTowerTop,
+    jumpBonusFromLanding,
+} from "./combat.js";
 
 /**
  * BFS to find all hexes a die can reach, respecting movement rules.
- * The die's combat power is computed once before movement begins and stays fixed.
+ *
+ * Each queue entry carries the jump-bonus list accumulated so far (same model
+ * as turnContext.jumpContext). Arrival CP at a neighbor is faceValue plus
+ * bonuses still in hex-distance range. Landing on a friendly appends that
+ * tower's S−E bonus for subsequent steps.
  *
  * @param {import("../../docs/runtime-types/diceMap.js").DiceMap} dice
  * @param {HexCoords} startCoords
- * @param {number} movingCp - combat power of the moving die
- * @param {number} movingRange - movement range of the moving die
+ * @param {number} movingRange - movement range of the die (face value for lone/tower top)
  * @param {string} activePlayer
  * @param {MapHexSet} mapHexSet
  * @returns {Map<string, { coords: HexCoords, path: HexCoords[] }>}
  */
-function bfsDie(dice, startCoords, movingCp, movingRange, activePlayer, mapHexSet) {
+function bfsDie(dice, startCoords, movingRange, activePlayer, mapHexSet) {
     const startKey = hexKey(startCoords);
+    const startDie = getTopDie(dice, startCoords);
+    const faceValue = startDie ? startDie.faceValue : 0;
+
+    /** @type {import("../../docs/runtime-types/jumpBonus.js").JumpBonus[]} */
+    const startBonuses = [];
+    if (isTower(dice, startCoords) && startDie) {
+        const seed = jumpBonusFromTowerTop(dice, startCoords);
+        if (seed) startBonuses.push(seed);
+    }
+
     const reachable = new Map();
     // best[hexKey] = max stepsLeft seen at that hex; re-explore if we arrive with more steps
     const best = new Map([[startKey, movingRange]]);
-    const queue = [{ coords: startCoords, stepsLeft: movingRange, path: [startCoords] }];
+    const queue = [{
+        coords: startCoords,
+        stepsLeft: movingRange,
+        path: [startCoords],
+        bonuses: startBonuses,
+    }];
 
     while (queue.length > 0) {
-        const { coords, stepsLeft, path } = queue.shift();
+        const { coords, stepsLeft, path, bonuses } = queue.shift();
         if (stepsLeft === 0) continue;
 
         for (const neighbor of hexNeighbors(coords)) {
@@ -35,23 +59,27 @@ function bfsDie(dice, startCoords, movingCp, movingRange, activePlayer, mapHexSe
             if (!mapHexSet.has(nKey)) continue;
 
             const top = getTopDie(dice, neighbor);
+            // Arrival CP before stacking onto a friendly at the neighbor.
+            const neighborCp = effectiveJumpCombatPower(faceValue, bonuses, neighbor);
+
             let canStop = false;
             let canPass = false;
+            /** @type {typeof bonuses} */
+            let nextBonuses = bonuses;
 
             if (!top) {
                 canStop = true;
                 canPass = true;
             } else if (top.owner === activePlayer) {
-                // Can pass through and stop on friendly only if moving cp > friendly cp
                 const friendlyCp = getCombatPower(dice, neighbor);
-                if (movingCp > friendlyCp) {
+                if (neighborCp > friendlyCp) {
                     canStop = true;
                     canPass = true;
+                    nextBonuses = [...bonuses, jumpBonusFromLanding(dice, neighbor, activePlayer)];
                 }
             } else {
-                // Enemy: can attack (stop) if moving cp > enemy cp; cannot pass through
                 const enemyCp = getCombatPower(dice, neighbor);
-                if (movingCp > enemyCp) {
+                if (neighborCp > enemyCp) {
                     canStop = true;
                 }
             }
@@ -66,7 +94,12 @@ function bfsDie(dice, startCoords, movingCp, movingRange, activePlayer, mapHexSe
                 const newStepsLeft = stepsLeft - 1;
                 if (newStepsLeft > (best.get(nKey) ?? -1)) {
                     best.set(nKey, newStepsLeft);
-                    queue.push({ coords: neighbor, stepsLeft: newStepsLeft, path: newPath });
+                    queue.push({
+                        coords: neighbor,
+                        stepsLeft: newStepsLeft,
+                        path: newPath,
+                        bonuses: nextBonuses,
+                    });
                 }
             }
         }
@@ -161,16 +194,15 @@ export function getLegalActions(state, mapHexSet) {
         actions.push({ type: 'REROLL', dieId });
 
         // MOVE_DIE: die moves (or jumps off tower) using its face value as movement range
-        const movingCp = getCombatPower(dice, die.coords);
         const dieRange = die.faceValue; // movement range for a die (lone or jumping from tower)
-        const dieReachable = bfsDie(dice, die.coords, movingCp, dieRange, activePlayer, mapHexSet);
+        const dieReachable = bfsDie(dice, die.coords, dieRange, activePlayer, mapHexSet);
         for (const { path } of dieReachable.values()) {
             actions.push({ type: 'MOVE_DIE', dieId, path });
         }
 
         if (isTower(dice, die.coords)) {
             // MOVE_TOWER: the whole tower moves; cannot pass through any dice
-            const towerCp = movingCp; // getCombatPower already covers tower formula
+            const towerCp = getCombatPower(dice, die.coords); // getCombatPower already covers tower formula
             const towerRange = getMovementRange(dice, die.coords); // max(O-E, 1)
             const towerReachable = bfsTower(dice, die.coords, towerCp, towerRange, activePlayer, mapHexSet);
             for (const { path } of towerReachable.values()) {

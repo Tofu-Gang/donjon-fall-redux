@@ -49,10 +49,10 @@ Pure functions, no React. Each module is independently testable.
 - `getDieById(dice:DiceMap, dieId:string)` → Die entry (or null)
 
 ### `combat.js`
-- `getCombatPower(dice:DiceMap, dieId:string, turnContext:TurnContext|null)` → number
+- `getCombatPower(dice:DiceMap, coords:HexCoords, turnContext:TurnContext|null)` → number
   - Lone die: face value
   - Tower top: F + S − E
-  - Jumping die within retained range: retainedPower (from turnContext)
+  - Jumping die (alone, matching jumpContext): faceValue + Σ active bonuses (hex distance per origin)
 - `getMovementRange(dice:DiceMap, dieId:string)` → number
   - Lone die: face value
   - Tower top die: face value (not combat power)

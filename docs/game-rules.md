@@ -57,14 +57,15 @@ Choose and perform **exactly one** of the 4 actions (see below).
 Move one of your dice up to its movement range along any path (direction may change mid-move).
 - Cannot pass through enemy dice/towers.
 - Can pass through/stop on your own dice/towers only if the moving die combat power is higher than the die/tower being passed through.
-- Passing through a friendly die/tower is treated as forming a temporary tower at that point.
-The remaining movement continues as if jumping off that tower
+- Passing through a friendly die/tower is treated as forming a tower at that point (the moving die stacks on top).
+The remaining movement continues as if jumping off that tower.
 No extra movement is granted; steps already taken still count.
 - Moving onto an empty field just moves there.
 - Moving onto an enemy field triggers a **combat**, provided your die's combat power exceeds enemy's one.
-- Jump from tower: A die on top of your tower may detach and move within its (the die's) movement range. 
-It retains combat power of the whole tower within the tower movement range. 
-Beyond that distance, combat power reverts to normal.
+- Jump from tower: A die on top of your tower may detach and move within its (the die's) movement range.
+It retains a combat-power **bonus** from that tower (see Combat Power — jumping) while within the tower's movement range measured as hex distance from the tower hex.
+The same applies when leaving a tower formed mid-move by passing through a friendly.
+Bonuses from multiple towers **stack**; leaving one tower's range drops only that tower's bonus.
 
 ### Move Tower
 
@@ -169,10 +170,13 @@ If the die is on top of a **tower**, it's combat power is calculated as F + S - 
 - S = supporting dice count; a die is a supporting one if it is not on the top of the tower, and it has the same owner as the top die
 - E = enemy dice count; any die that has a different owner than the tower top die
 
-A die jumping off of a top of a **tower** retains its combat power.
-This is the case only for the remainder of the turn the jump occurred and only inside the **tower movement range** (every hex reachable by the tower within one turn).
-The tower movement range for this situation is calculated **before** the die jumped off.
-After the turn ends or the die moves outside the original **tower movement range**, the die combat power is then calculated normally.
+A die jumping off the top of a **tower** retains a combat-power **bonus** from that tower for the remainder of the turn.
+- The bonus equals **S − E** of the dice under the mover at the moment before it leaves (so full tower CP was F + bonus).
+- The bonus applies only while the die's **hex distance** from that tower's hex is at most the tower's movement range, calculated **before** the die left (`max(O − E, 1)` including the mover).
+- Jumping off / leaving several towers in one Move Die accumulates several bonuses; they stack.
+- Leaving one tower's range removes only that tower's bonus; bonuses from other towers still in range remain.
+- When no jump bonuses apply, a lone die's combat power is its face value again.
+- After the turn ends, all jump bonuses are discarded.
 If the die is a part of a tower but is not on the top of it, combat power is not defined.
 
 ### Movement Range

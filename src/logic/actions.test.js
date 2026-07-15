@@ -231,6 +231,152 @@ describe("getLegalActions", () => {
         const actions = getLegalActions(makeState({ dice }), SMALL_MAP);
         expect(actions.some(a => a.dieId === "r1")).toBe(false);
     });
+
+    // ─── jump-from-tower: per-destination combat power rule ─────────────────
+
+    function hasMoveTo(actions, dieId, target) {
+        return actions.some(a =>
+            a.type === "MOVE_DIE" && a.dieId === dieId
+            && a.path[a.path.length - 1].q === target.q
+            && a.path[a.path.length - 1].r === target.r
+            && a.path[a.path.length - 1].s === target.s
+        );
+    }
+
+    it("jump from tower: uses tower CP for attacks within the tower's retained range", () => {
+        // Red tower: r1 (face 3) below, r2 (face 4) on top → tower CP = 4+1 = 5, tower range = 2.
+        // Blue lone die (face 3) at H1: distance 1 ≤ tower range 2, effective CP = 5 > 3 → attack legal.
+        const dice = makeDice(
+            makeDie("r1", 0, 0, 0, 0, "red", 3),
+            makeDie("r2", 0, 0, 0, 1, "red", 4),
+            makeDie("b1", 1, -1, 0, 0, "blue", 3),
+        );
+        const actions = getLegalActions(makeState({ dice }), SMALL_MAP);
+        expect(hasMoveTo(actions, "r2", { q: 1, r: -1, s: 0 })).toBe(true);
+    });
+
+    it("jump from tower: reverts to face value CP once path leaves the retained range", () => {
+        // Red tower: 2 dice, top face 4 → tower CP = 5, tower range = 2.
+        // Blue lone die (face 4) at H3: distance 3 > tower range 2, effective CP = 4 = 4 → no attack.
+        // A linear path H0 → H1 → H2 → H3 needs only 3 hexes, all on the same map.
+        const map = makeMapHexSet([CENTER_HEX, ...CENTER_NEIGHBORS,
+            [2, -2, 0], [3, -3, 0]]);
+        const dice = makeDice(
+            makeDie("r1", 0, 0, 0, 0, "red", 3),
+            makeDie("r2", 0, 0, 0, 1, "red", 4),
+            makeDie("b1", 3, -3, 0, 0, "blue", 4),
+        );
+        const actions = getLegalActions(makeState({ dice }), map);
+        // The die has movement range 4 (face value), so it can reach H3 by distance, but the
+        // attack is illegal because effective CP outside tower range = face value 4, not tower CP 5.
+        expect(hasMoveTo(actions, "r2", { q: 3, r: -3, s: 0 })).toBe(false);
+    });
+
+    it("jump from tower: can attack weaker enemy beyond retained range when face value still wins", () => {
+        // Same setup, but blue die (face 3) at H3: effective CP = 4 > 3 → attack legal.
+        const map = makeMapHexSet([CENTER_HEX, ...CENTER_NEIGHBORS,
+            [2, -2, 0], [3, -3, 0]]);
+        const dice = makeDice(
+            makeDie("r1", 0, 0, 0, 0, "red", 3),
+            makeDie("r2", 0, 0, 0, 1, "red", 4),
+            makeDie("b1", 3, -3, 0, 0, "blue", 3),
+        );
+        const actions = getLegalActions(makeState({ dice }), map);
+        expect(hasMoveTo(actions, "r2", { q: 3, r: -3, s: 0 })).toBe(true);
+    });
+
+    it("jump from tower: attack within retained range still works (no regression)", () => {
+        // Red tower: 2 dice, top face 5 → tower CP = 5+1 = 6, tower range = 2.
+        // Blue (face 4) at H2: distance 2 = tower range 2, effective CP = 6 > 4 → attack legal.
+        const dice = makeDice(
+            makeDie("r1", 0, 0, 0, 0, "red", 3),
+            makeDie("r2", 0, 0, 0, 1, "red", 5),
+            makeDie("b1", 2, -2, 0, 0, "blue", 4),
+        );
+        const actions = getLegalActions(makeState({ dice }), makeMapHexSet([CENTER_HEX, ...CENTER_NEIGHBORS, [2, -2, 0]]));
+        expect(hasMoveTo(actions, "r2", { q: 2, r: -2, s: 0 })).toBe(true);
+    });
+
+    it("lone die jump: equal face values cannot attack at distance 4", () => {
+        // Lone red die (face 4); blue die (face 4) at H4 → 4 vs 4 → no attack.
+        const map = makeMapHexSet([
+            [0, 0, 0], [1, -1, 0], [2, -2, 0], [3, -3, 0], [4, -4, 0],
+        ]);
+        const dice = makeDice(
+            makeDie("r1", 0, 0, 0, 0, "red", 4),
+            makeDie("b1", 4, -4, 0, 0, "blue", 4),
+        );
+        const actions = getLegalActions(makeState({ dice }), map);
+        expect(hasMoveTo(actions, "r1", { q: 4, r: -4, s: 0 })).toBe(false);
+    });
+
+    it("passing through friendly mid-move: stacks landing bonus for later attacks", () => {
+        // Lone red (face 4) at H0; friendly (face 2) at H1; enemy (face 3) at H2.
+        // Arrive H1 with CP 4 > 2; append bonus +1 range 2. At H2: CP 5 > 3 → attack legal.
+        const map = makeMapHexSet([CENTER_HEX, [1, -1, 0], [2, -2, 0]]);
+        const dice = makeDice(
+            makeDie("r1", 0, 0, 0, 0, "red", 4),
+            makeDie("r2", 1, -1, 0, 0, "red", 2),
+            makeDie("b1", 2, -2, 0, 0, "blue", 3),
+        );
+        const actions = getLegalActions(makeState({ dice }), map);
+        expect(hasMoveTo(actions, "r1", { q: 2, r: -2, s: 0 })).toBe(true);
+    });
+
+    it("passing through friendly mid-move: stacked bonus can enable an otherwise illegal attack", () => {
+        // Face 3 cannot beat enemy 3 alone; after stacking on friendly face 1 → CP 4 > 3.
+        const map = makeMapHexSet([CENTER_HEX, [1, -1, 0], [2, -2, 0]]);
+        const dice = makeDice(
+            makeDie("r1", 0, 0, 0, 0, "red", 3),
+            makeDie("r2", 1, -1, 0, 0, "red", 1),
+            makeDie("b1", 2, -2, 0, 0, "blue", 3),
+        );
+        const actions = getLegalActions(makeState({ dice }), map);
+        expect(hasMoveTo(actions, "r1", { q: 2, r: -2, s: 0 })).toBe(true);
+    });
+
+    it("chained towers: partial range falloff keeps earlier tower bonus", () => {
+        // H0:[6] H1:[1,1,1] H2:[1] then empty. At H5 only T1 (+3) remains → CP 9.
+        // Enemy face 8 at H5 → 9 > 8 attack legal; at H6 CP 6 → 6 > 8 false.
+        const map = makeMapHexSet([
+            [0, 0, 0], [1, -1, 0], [2, -2, 0], [3, -3, 0],
+            [4, -4, 0], [5, -5, 0], [6, -6, 0],
+        ]);
+        const diceNear = makeDice(
+            makeDie("r6", 0, 0, 0, 0, "red", 6),
+            makeDie("t1", 1, -1, 0, 0, "red", 1),
+            makeDie("t2", 1, -1, 0, 1, "red", 1),
+            makeDie("t3", 1, -1, 0, 2, "red", 1),
+            makeDie("t4", 2, -2, 0, 0, "red", 1),
+            makeDie("b1", 5, -5, 0, 0, "blue", 8),
+        );
+        expect(hasMoveTo(getLegalActions(makeState({ dice: diceNear }), map), "r6", { q: 5, r: -5, s: 0 })).toBe(true);
+
+        const diceFar = makeDice(
+            makeDie("r6", 0, 0, 0, 0, "red", 6),
+            makeDie("t1", 1, -1, 0, 0, "red", 1),
+            makeDie("t2", 1, -1, 0, 1, "red", 1),
+            makeDie("t3", 1, -1, 0, 2, "red", 1),
+            makeDie("t4", 2, -2, 0, 0, "red", 1),
+            makeDie("b1", 6, -6, 0, 0, "blue", 8),
+        );
+        expect(hasMoveTo(getLegalActions(makeState({ dice: diceFar }), map), "r6", { q: 6, r: -6, s: 0 })).toBe(false);
+    });
+
+    it("can pass through a friendly tower using retained starting-tower CP", () => {
+        // Red tower CP 5 at H0; friendly tower CP 3 at H1; need 5 > 3 to pass.
+        const map = makeMapHexSet([CENTER_HEX, [1, -1, 0], [2, -2, 0]]);
+        const dice = makeDice(
+            makeDie("r1", 0, 0, 0, 0, "red", 3),
+            makeDie("r2", 0, 0, 0, 1, "red", 4),
+            makeDie("f1", 1, -1, 0, 0, "red", 1),
+            makeDie("f2", 1, -1, 0, 1, "red", 2),
+        );
+        // Friendly tower top face 2 + 1 support = 3. Arrive with CP 5 > 3.
+        const actions = getLegalActions(makeState({ dice }), map);
+        expect(hasMoveTo(actions, "r2", { q: 1, r: -1, s: 0 })).toBe(true);
+        expect(hasMoveTo(actions, "r2", { q: 2, r: -2, s: 0 })).toBe(true);
+    });
 });
 
 // ─── isGameOver ──────────────────────────────────────────────────────────────

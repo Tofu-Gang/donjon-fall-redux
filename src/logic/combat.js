@@ -1,9 +1,110 @@
 /** @typedef {import("../../docs/runtime-types/diceMap.js").DiceMap} DiceMap */
 /** @typedef {import("../../docs/runtime-types/hexCoords.js").HexCoords} HexCoords */
 /** @typedef {import("../../docs/runtime-types/mapHexSet.js").MapHexSet} MapHexSet */
+/** @typedef {import("../../docs/runtime-types/jumpBonus.js").JumpBonus} JumpBonus */
+/** @typedef {import("../../docs/runtime-types/jumpContext.js").JumpContext} JumpContext */
+/** @typedef {import("../../docs/runtime-types/turnContext.js").TurnContext} TurnContext */
 
-import { hexKey, hexDirection } from "./hex.js";
+import { hexKey, hexDirection, hexDistance } from "./hex.js";
 import { getDiceAtHex, getTopDie, getNextStackIndex } from "./dice.js";
+
+/**
+ * Effective combat power for a jumping die: face value plus every bonus still
+ * in range at `coords` (hex distance from that bonus's origin).
+ *
+ * @param {number} faceValue
+ * @param {JumpBonus[] | null | undefined} bonuses
+ * @param {HexCoords} coords
+ * @returns {number}
+ */
+export function effectiveJumpCombatPower(faceValue, bonuses, coords) {
+    let cp = faceValue;
+    for (const b of bonuses ?? []) {
+        if (hexDistance(b.originCoords, coords) <= b.retainedRange) {
+            cp += b.bonus;
+        }
+    }
+    return cp;
+}
+
+/**
+ * Bonus granted when the moving die leaves a tower where it is already on top.
+ * Returns null if the hex is not a tower.
+ *
+ * @param {DiceMap} dice
+ * @param {HexCoords} coords
+ * @returns {JumpBonus | null}
+ */
+export function jumpBonusFromTowerTop(dice, coords) {
+    const stack = getDiceAtHex(dice, coords);
+    if (stack.length < 2) return null;
+    const top = stack[stack.length - 1];
+    const below = stack.slice(0, -1);
+    const supporting = below.filter(d => d.owner === top.owner).length;
+    const enemyBelow = below.filter(d => d.owner !== top.owner).length;
+    const ownCount = stack.filter(d => d.owner === top.owner).length;
+    const enemyCount = stack.filter(d => d.owner !== top.owner).length;
+    return {
+        originCoords: { q: coords.q, r: coords.r, s: coords.s },
+        bonus: supporting - enemyBelow,
+        retainedRange: Math.max(ownCount - enemyCount, 1),
+    };
+}
+
+/**
+ * Bonus granted when the moving die stacks onto dice already at `coords`
+ * (those dice become the supports/enemies under the mover).
+ *
+ * @param {DiceMap} dice
+ * @param {HexCoords} coords
+ * @param {string} movingOwner
+ * @returns {JumpBonus}
+ */
+export function jumpBonusFromLanding(dice, coords, movingOwner) {
+    const stack = getDiceAtHex(dice, coords);
+    const supporting = stack.filter(d => d.owner === movingOwner).length;
+    const enemy = stack.filter(d => d.owner !== movingOwner).length;
+    return {
+        originCoords: { q: coords.q, r: coords.r, s: coords.s },
+        bonus: supporting - enemy,
+        retainedRange: Math.max(supporting + 1 - enemy, 1),
+    };
+}
+
+/**
+ * Walks a MOVE_DIE path and builds turnContext.jumpContext from every tower
+ * left along the way (starting tower and/or friendlies landed on).
+ * Returns null when no bonuses were created.
+ *
+ * @param {DiceMap} dice
+ * @param {string} dieId
+ * @param {HexCoords[]} path
+ * @param {string} activePlayer
+ * @returns {TurnContext | null}
+ */
+export function buildJumpContextAlongPath(dice, dieId, path, activePlayer) {
+    if (!path.length || !dice[dieId]) return null;
+
+    /** @type {JumpBonus[]} */
+    const bonuses = [];
+    const start = path[0];
+    const startTop = getTopDie(dice, start);
+    if (startTop?.id === dieId) {
+        const fromStart = jumpBonusFromTowerTop(dice, start);
+        if (fromStart) bonuses.push(fromStart);
+    }
+
+    for (let i = 1; i < path.length; i++) {
+        const hex = path[i];
+        const top = getTopDie(dice, hex);
+        if (top && top.owner === activePlayer) {
+            bonuses.push(jumpBonusFromLanding(dice, hex, activePlayer));
+        }
+    }
+
+    if (bonuses.length === 0) return null;
+    return { jumpContext: { dieId, bonuses } };
+}
 
 /**
  * Returns the combat power of the die or tower currently at the given hex.
@@ -11,16 +112,30 @@ import { getDiceAtHex, getTopDie, getNextStackIndex } from "./dice.js";
  * For a tower: F + S - E, where F is the top die face value, S is the number of
  * supporting dice (same owner as top die, not the top die itself), and E is the
  * number of enemy dice (different owner than top die).
+ * For a jumping die alone on a hex: if turnContext.jumpContext matches that die,
+ * returns faceValue + Σ bonuses still in range; otherwise face value.
  * Returns 0 for an empty hex.
  *
  * @param {DiceMap} dice
  * @param {HexCoords} coords
+ * @param {TurnContext | null} [turnContext=null]
  * @returns {number}
  */
-export function getCombatPower(dice, coords) {
+export function getCombatPower(dice, coords, turnContext = null) {
     const stack = getDiceAtHex(dice, coords);
     if (stack.length === 0) return 0;
     const topDie = stack[stack.length - 1];
+
+    // Jump retention applies only while the die is alone (not tower top).
+    const jumpContext = turnContext?.jumpContext;
+    if (
+        jumpContext
+        && jumpContext.dieId === topDie.id
+        && stack.length === 1
+    ) {
+        return effectiveJumpCombatPower(topDie.faceValue, jumpContext.bonuses, coords);
+    }
+
     if (stack.length === 1) return topDie.faceValue;
     const rest = stack.slice(0, -1);
     const supporting = rest.filter(d => d.owner === topDie.owner).length;

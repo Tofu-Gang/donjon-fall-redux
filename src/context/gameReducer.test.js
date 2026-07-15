@@ -319,6 +319,107 @@ describe("createReducer — END_TURN", () => {
         const next = reducer(state, { type: "END_TURN" });
         expect(next.currentTurnIndex).toBe(0);
     });
+
+    it("clears turnContext.jumpContext", () => {
+        const reducer = createReducer(SMALL_MAP);
+        const state = makeState({
+            turnContext: {
+                jumpContext: {
+                    dieId: "r2",
+                    bonuses: [{ originCoords: { q: 0, r: 0, s: 0 }, bonus: 1, retainedRange: 2 }],
+                },
+            },
+        });
+        const next = reducer(state, { type: "END_TURN" });
+        expect(next.turnContext).toBeNull();
+    });
+});
+
+// ─── applyGameAction — turnContext.jumpContext lifecycle ─────────────────────
+
+describe("applyGameAction — MOVE_DIE and turnContext.jumpContext", () => {
+    it("sets turnContext.jumpContext when a die jumps off a tower", () => {
+        // Red tower at H0: r1 (face 3) below, r2 (face 4) on top → bonus +1, range 2.
+        const dice = makeDice(
+            makeDie("r1", 0, 0, 0, 0, "red", 3),
+            makeDie("r2", 0, 0, 0, 1, "red", 4),
+        );
+        const state = makeState({ dice });
+        const next = applyGameAction(state, {
+            type: "MOVE_DIE",
+            dieId: "r2",
+            path: [{ q: 0, r: 0, s: 0 }, { q: 1, r: -1, s: 0 }],
+        });
+        expect(next.turnContext).toEqual({
+            jumpContext: {
+                dieId: "r2",
+                bonuses: [{
+                    originCoords: { q: 0, r: 0, s: 0 },
+                    bonus: 1,
+                    retainedRange: 2,
+                }],
+            },
+        });
+    });
+
+    it("keeps turnContext.jumpContext after landing outside a tower's range (cleared only on END_TURN)", () => {
+        // Bonuses stay on state; effective CP at the landing hex is face value.
+        const dice = makeDice(
+            makeDie("r1", 0, 0, 0, 0, "red", 3),
+            makeDie("r2", 0, 0, 0, 1, "red", 4),
+        );
+        const state = makeState({ dice });
+        const next = applyGameAction(state, {
+            type: "MOVE_DIE",
+            dieId: "r2",
+            path: [
+                { q: 0, r: 0, s: 0 },
+                { q: 1, r: -1, s: 0 },
+                { q: 2, r: -2, s: 0 },
+                { q: 3, r: -3, s: 0 },
+            ],
+        });
+        expect(next.turnContext?.jumpContext?.bonuses).toEqual([{
+            originCoords: { q: 0, r: 0, s: 0 },
+            bonus: 1,
+            retainedRange: 2,
+        }]);
+    });
+
+    it("keeps turnContext.jumpContext null when a lone die moves over empty hexes", () => {
+        const dice = makeDice(makeDie("r1", 0, 0, 0, 0, "red", 4));
+        const state = makeState({ dice });
+        const next = applyGameAction(state, {
+            type: "MOVE_DIE",
+            dieId: "r1",
+            path: [{ q: 0, r: 0, s: 0 }, { q: 1, r: -1, s: 0 }],
+        });
+        expect(next.turnContext).toBeNull();
+    });
+
+    it("preserves turnContext.jumpContext through COMBAT and OCCUPY until END_TURN", () => {
+        const dice = makeDice(
+            makeDie("r1", 0, 0, 0, 0, "red", 3),
+            makeDie("r2", 0, 0, 0, 1, "red", 4),
+            makeDie("b1", 3, -3, 0, 0, "blue", 2),
+        );
+        const state = makeState({ dice });
+        const moved = applyGameAction(state, {
+            type: "MOVE_DIE",
+            dieId: "r2",
+            path: [
+                { q: 0, r: 0, s: 0 },
+                { q: 1, r: -1, s: 0 },
+                { q: 2, r: -2, s: 0 },
+                { q: 3, r: -3, s: 0 },
+            ],
+        });
+        expect(moved.turnPhase).toBe("COMBAT");
+        expect(moved.turnContext?.jumpContext?.dieId).toBe("r2");
+        const afterCombat = applyCombatResolution(moved, "OCCUPY", SMALL_MAP, () => 1);
+        expect(afterCombat.turnPhase).toBe("ACTION");
+        expect(afterCombat.turnContext?.jumpContext?.dieId).toBe("r2");
+    });
 });
 
 describe("createReducer — unknown action", () => {

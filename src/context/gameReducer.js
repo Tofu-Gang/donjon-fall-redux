@@ -1,7 +1,7 @@
 /** @typedef {import("../../docs/runtime-types/pendingCombat.js").PendingCombat} PendingCombat */
 import { evaluateFocalPoints } from "../logic/focalPoints.js";
 import { getDiceAtHex, getNextStackIndex, getTopDie } from "../logic/dice.js";
-import { resolveCombatOccupy, resolveCombatPhase1, resolveCombatPush } from "../logic/combat.js";
+import { buildJumpContextAlongPath, resolveCombatOccupy, resolveCombatPhase1, resolveCombatPush } from "../logic/combat.js";
 import { hexKey } from "../logic/hex.js";
 import { isGameOver } from "../logic/actions.js";
 import mapDataDefault from "../maps/default.json";
@@ -167,9 +167,11 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
         const targetCoords = path[path.length - 1];
         const targetTop = getTopDie(dice, targetCoords);
         const isCombatTarget = targetTop !== null && targetTop.owner !== activePlayer;
+        const turnContext = buildJumpContextAlongPath(dice, dieId, path, activePlayer);
 
         if (isCombatTarget) {
             // Park in COMBAT phase with the pending combat describing attacker/defender coords.
+            // Jump bonuses are kept for the remainder of the turn (cleared on END_TURN).
             return {
                 ...state,
                 turnPhase: "COMBAT",
@@ -179,15 +181,18 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
                     defenderCoords: targetCoords,
                     isTowerAttack: false,
                 },
+                turnContext,
                 actionTaken: true,
             };
         }
 
         // Peaceful move: place the die on top of whatever is at the destination.
         const newStackIndex = getNextStackIndex(dice, targetCoords);
+        const newDice = { ...dice, [dieId]: { ...die, coords: targetCoords, stackIndex: newStackIndex } };
         return {
             ...state,
-            dice: { ...dice, [dieId]: { ...die, coords: targetCoords, stackIndex: newStackIndex } },
+            dice: newDice,
+            turnContext,
             actionTaken: true,
         };
     }
@@ -268,6 +273,8 @@ export function applyCombatResolution(state, resolution, mapHexSet, rollFn = rol
         players,
         turnPhase: "ACTION",
         pendingCombat: null,
+        // Jump bonuses persist until END_TURN (effective CP filtered by distance).
+        turnContext: state.turnContext,
     };
 }
 
