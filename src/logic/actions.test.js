@@ -377,6 +377,40 @@ describe("getLegalActions", () => {
         expect(hasMoveTo(actions, "r2", { q: 1, r: -1, s: 0 })).toBe(true);
         expect(hasMoveTo(actions, "r2", { q: 2, r: -2, s: 0 })).toBe(true);
     });
+
+    it("stacked bonuses required: face / single-tower alone cannot beat blue CP 7", () => {
+        // H0:[4] H1:[1,1,1](+3,r4) H2:[1](+1,r2) H3:blue[1,1,5] CP 7.
+        // Both in range → 4+3+1 = 8 > 7.
+        // Face 4, T1-only 7, T2-only 5 — none beat 7.
+        const map = makeMapHexSet([
+            [0, 0, 0], [1, -1, 0], [2, -2, 0], [3, -3, 0],
+        ]);
+        const dice = makeDice(
+            makeDie("r4", 0, 0, 0, 0, "red", 4),
+            makeDie("t1", 1, -1, 0, 0, "red", 1),
+            makeDie("t2", 1, -1, 0, 1, "red", 1),
+            makeDie("t3", 1, -1, 0, 2, "red", 1),
+            makeDie("t4", 2, -2, 0, 0, "red", 1),
+            makeDie("b1", 3, -3, 0, 0, "blue", 1),
+            makeDie("b2", 3, -3, 0, 1, "blue", 1),
+            makeDie("b3", 3, -3, 0, 2, "blue", 5),
+        );
+        const actions = getLegalActions(makeState({ dice }), map);
+        expect(hasMoveTo(actions, "r4", { q: 3, r: -3, s: 0 })).toBe(true);
+
+        // No second pass-through: only T1 → CP 7, 7 > 7 is false.
+        const diceNoSecond = makeDice(
+            makeDie("r4", 0, 0, 0, 0, "red", 4),
+            makeDie("t1", 1, -1, 0, 0, "red", 1),
+            makeDie("t2", 1, -1, 0, 1, "red", 1),
+            makeDie("t3", 1, -1, 0, 2, "red", 1),
+            makeDie("b1", 3, -3, 0, 0, "blue", 1),
+            makeDie("b2", 3, -3, 0, 1, "blue", 1),
+            makeDie("b3", 3, -3, 0, 2, "blue", 5),
+        );
+        const withoutStack = getLegalActions(makeState({ dice: diceNoSecond }), map);
+        expect(hasMoveTo(withoutStack, "r4", { q: 3, r: -3, s: 0 })).toBe(false);
+    });
 });
 
 // ─── isGameOver ──────────────────────────────────────────────────────────────

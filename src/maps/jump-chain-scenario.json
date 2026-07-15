@@ -1,0 +1,76 @@
+{
+  "id": "jump-chain-scenario",
+  "name": "Jump chain stacking playtest",
+  "authors": [],
+  "createdOn": 1747353600000,
+  "access": {
+    "active": true,
+    "state": "APPROVED"
+  },
+  "hexes": [
+    { "q": 0, "r": 0, "s": 0 },
+    { "q": 1, "r": -1, "s": 0 },
+    { "q": 2, "r": -2, "s": 0 },
+    { "q": 3, "r": -3, "s": 0 },
+    { "q": 0, "r": -1, "s": 1 },
+    { "q": 1, "r": -2, "s": 1 },
+    { "q": 2, "r": -3, "s": 1 },
+    { "q": 3, "r": -4, "s": 1 },
+    { "q": 1, "r": 0, "s": -1 },
+    { "q": 2, "r": -1, "s": -1 },
+    { "q": 3, "r": -2, "s": -1 },
+    { "q": 4, "r": -3, "s": -1 }
+  ],
+  "baseGroups": [
+    {
+      "forPlayersCount": 2,
+      "hexes": [
+        {
+          "coords": { "q": 0, "r": 0, "s": 0 },
+          "dice": [{ "type": "D6", "faceValue": 4, "stackIndex": 0 }]
+        },
+        {
+          "coords": { "q": 1, "r": -1, "s": 0 },
+          "dice": [
+            { "type": "D6", "faceValue": 1, "stackIndex": 0 },
+            { "type": "D6", "faceValue": 1, "stackIndex": 1 },
+            { "type": "D6", "faceValue": 1, "stackIndex": 2 }
+          ]
+        },
+        {
+          "coords": { "q": 2, "r": -2, "s": 0 },
+          "dice": [{ "type": "D6", "faceValue": 1, "stackIndex": 0 }]
+        }
+      ]
+    },
+    {
+      "forPlayersCount": 2,
+      "hexes": [
+        {
+          "coords": { "q": 3, "r": -3, "s": 0 },
+          "dice": [
+            { "type": "D6", "faceValue": 1, "stackIndex": 0 },
+            { "type": "D6", "faceValue": 1, "stackIndex": 1 },
+            { "type": "D6", "faceValue": 5, "stackIndex": 2 }
+          ]
+        }
+      ]
+    }
+  ],
+  "focalPointsGroups": [
+    {
+      "forPlayersCount": 2,
+      "hexes": [
+        { "coords": { "q": 1, "r": -2, "s": 1 }, "isActive": false },
+        { "coords": { "q": 2, "r": -3, "s": 1 }, "isActive": false },
+        { "coords": { "q": 3, "r": -4, "s": 1 }, "isActive": false }
+      ]
+    }
+  ],
+  "victoryPointsTargets": [
+    {
+      "forPlayersCount": 2,
+      "target": 5
+    }
+  ]
+}

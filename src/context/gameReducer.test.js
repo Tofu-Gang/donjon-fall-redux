@@ -7,6 +7,8 @@ import {
     createReducer,
 } from "./gameReducer.js";
 import mapDataDefault from "../maps/default.json";
+import { getLegalActions } from "../logic/actions.js";
+import { getCombatPower } from "../logic/combat.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -105,6 +107,37 @@ describe("buildInitialState", () => {
         const rollFn = vi.fn();
         buildInitialState(mapDataDefault, false, rollFn);
         expect(rollFn).not.toHaveBeenCalled();
+    });
+
+    it("jump-chain scenario: stacked bonuses required to attack blue tower (CP 8 > 7)", () => {
+        // Same layout as jump-chain-scenario.json; dice built explicitly so tests
+        // do not depend on buildInitialState asymmetry between base groups.
+        const mapHexSet = makeMapHexSet([
+            [0, 0, 0], [1, -1, 0], [2, -2, 0], [3, -3, 0],
+        ]);
+        const dice = makeDice(
+            makeDie("r4", 0, 0, 0, 0, "red", 4),
+            makeDie("t1", 1, -1, 0, 0, "red", 1),
+            makeDie("t2", 1, -1, 0, 1, "red", 1),
+            makeDie("t3", 1, -1, 0, 2, "red", 1),
+            makeDie("t4", 2, -2, 0, 0, "red", 1),
+            makeDie("b1", 3, -3, 0, 0, "blue", 1),
+            makeDie("b2", 3, -3, 0, 1, "blue", 1),
+            makeDie("b3", 3, -3, 0, 2, "blue", 5),
+        );
+        const blueHex = { q: 3, r: -3, s: 0 };
+        expect(getCombatPower(dice, blueHex)).toBe(7);
+
+        const actions = getLegalActions(makeState({ dice }), mapHexSet);
+        const attack = actions.find(a =>
+            a.type === "MOVE_DIE"
+            && a.dieId === "r4"
+            && a.path[a.path.length - 1].q === 3
+            && a.path[a.path.length - 1].r === -3,
+        );
+        expect(attack).toBeDefined();
+        expect(attack.path.some(h => h.q === 1 && h.r === -1)).toBe(true);
+        expect(attack.path.some(h => h.q === 2 && h.r === -2)).toBe(true);
     });
 });
 
