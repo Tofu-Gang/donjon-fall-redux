@@ -120,7 +120,30 @@ export function buildInitialState(mapData, randomizeDice, rollFn = rollD6) {
         pendingCombat: null,
         actionTaken: false,
         victoryPointsTarget,
+        // Ephemeral DieFace chrome: dieId → "rerolled" | "damaged". Cleared at
+        // the start of each FOCAL evaluation (next turn).
+        dieVisualById: {},
     };
+}
+
+/**
+ * Marks dice whose faceValue dropped between two dice maps.
+ *
+ * @param {object} prevDice
+ * @param {object} nextDice
+ * @param {"rerolled"|"damaged"} visual
+ * @param {object} [base={}] - Existing hints to merge into.
+ * @returns {object}
+ */
+function faceDropHints(prevDice, nextDice, visual, base = {}) {
+    const hints = { ...base };
+    for (const [id, die] of Object.entries(nextDice)) {
+        const prev = prevDice[id];
+        if (prev && die.faceValue < prev.faceValue) {
+            hints[id] = visual;
+        }
+    }
+    return hints;
 }
 
 /**
@@ -144,6 +167,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
             ...state,
             dice: { ...dice, [die.id]: { ...die, faceValue: newValue } },
             actionTaken: true,
+            dieVisualById: { ...state.dieVisualById, [die.id]: "rerolled" },
         };
     }
 
@@ -267,6 +291,9 @@ export function applyCombatResolution(state, resolution, mapHexSet, rollFn = rol
         ? { ...state.players, [activePlayer]: state.players[activePlayer] + extraPoints }
         : state.players;
 
+    // Defender face drops from the push reroll → DieFace "damaged" chrome.
+    const dieVisualById = faceDropHints(dice, newDice, "damaged", state.dieVisualById);
+
     return {
         ...state,
         dice: newDice,
@@ -275,6 +302,7 @@ export function applyCombatResolution(state, resolution, mapHexSet, rollFn = rol
         pendingCombat: null,
         // Jump bonuses persist until END_TURN (effective CP filtered by distance).
         turnContext: state.turnContext,
+        dieVisualById,
     };
 }
 
@@ -291,7 +319,9 @@ export function createReducer(mapHexSet, rollFn = rollD6) {
             // Run focal-point scoring at the start of each turn, then drop back into ACTION.
             case "EVALUATE_FOCAL_POINTS": {
                 const { newState } = evaluateFocalPoints(state, rollFn);
-                return { ...newState, turnPhase: "ACTION", actionTaken: false };
+                // Reset prior-turn chrome; mark dice weakened by focal scoring as rerolled.
+                const dieVisualById = faceDropHints(state.dice, newState.dice, "rerolled");
+                return { ...newState, turnPhase: "ACTION", actionTaken: false, dieVisualById };
             }
             // Forward player actions to the pure applyGameAction helper.
             case "PERFORM_ACTION":

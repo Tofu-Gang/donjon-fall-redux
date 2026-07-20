@@ -16,4 +16,5 @@
  * @property {PendingCombat | null} pendingCombat - set when a move lands on an enemy hex and the player must choose Push or Occupy; null otherwise
  * @property {boolean} actionTaken - true once the active player has used their action this turn; controls End Turn availability
  * @property {number} victoryPointsTarget - score a player must reach to win; sourced from the map at game start
+ * @property {Object.<string, ("rerolled"|"damaged")>} [dieVisualById] - ephemeral DieFace chrome; cleared each FOCAL evaluation
  */

@@ -87,13 +87,16 @@ export default function Hex({
             />
             {dieOverlay && (
                 <div
+                    // DiceTower sets cursor:pointer on its own regions; force those
+                    // descendants to not-allowed when the hex is blocked.
+                    className={state === "blocked" ? "[&_*]:!cursor-not-allowed" : undefined}
                     style={{
                         position: "absolute",
                         left: "50%",
                         // Single die is centered on both axes; stacks are anchored from the top instead.
                         top: stack ? towerTopOffset : "50%",
                         transform: stack ? "translateX(-50%)" : "translate(-50%, -50%)",
-                        cursor: "pointer",
+                        cursor: state === "blocked" ? "not-allowed" : "pointer",
                     }}
                 >
                     {dieOverlay}

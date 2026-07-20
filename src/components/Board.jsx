@@ -12,7 +12,7 @@ const HEX_LAYOUT_SIZE = HEX_DIMS.h / 2;
 
 /**
  * Renders the hex grid for the current map, layering dice, base colors, focal points,
- * and per-tile state (selected / move / attack) on top. All clicks route through props.
+ * and per-tile state (selected / move / attack / blocked) on top. All clicks route through props.
  */
 export default function Board({
     mapData,
@@ -142,6 +142,8 @@ export default function Board({
                     owner = baseHexOwners[key];
                 }
 
+                // When a die is selected, every non-target hex dims to "blocked"
+                // so reachable move/attack tiles (and the selection) stand out.
                 let interactionState = "default";
                 if (key === selectedHexKey) {
                     interactionState = "selected";
@@ -149,7 +151,11 @@ export default function Board({
                     interactionState = "attack";
                 } else if (reachable.move.has(key)) {
                     interactionState = "move";
+                } else if (selectedDieId) {
+                    interactionState = "blocked";
                 }
+
+                const dieVisualById = state.dieVisualById ?? {};
 
                 return (
                     <div
@@ -158,6 +164,7 @@ export default function Board({
                             position: "absolute",
                             left: pixel.x + layout.offsetX - HEX_DIMS.w / 2,
                             top: pixel.y + layout.offsetY - HEX_DIMS.h / 2,
+                            cursor: interactionState === "blocked" ? "not-allowed" : undefined,
                         }}
                         onClick={() => onHexClick?.(coords)}
                     >
@@ -173,9 +180,10 @@ export default function Board({
                             onClickAt={onHexClick}
                             onTowerTopClick={(c) => onHexClick?.(c, { preferTowerMove: false })}
                             onTowerBodyClick={(c) => onHexClick?.(c, { preferTowerMove: true })}
-                            getDieState={(die) =>
-                                die.id === selectedDieId ? "selected" : "default"
-                            }
+                            getDieState={(die) => {
+                                if (die.id === selectedDieId) return "selected";
+                                return dieVisualById[die.id] ?? "default";
+                            }}
                         />
                     </div>
                 );
