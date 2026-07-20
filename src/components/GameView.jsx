@@ -76,14 +76,18 @@ export default function GameView() {
      * just selecting that die).
      *
      * @param {object} coords - Axial coords of the clicked hex.
+     * @param {{ preferTowerMove?: boolean }} [opts] - From DiceTower split click:
+     *   top die → preferTowerMove false; tower peeks → true. Omitted for hex /
+     *   lone-die clicks (always die-move selection).
      */
-    const handleHexClick = useCallback((coords) => {
+    const handleHexClick = useCallback((coords, opts = {}) => {
         // Actions are only allowed once per turn, during the ACTION phase
         if (state.turnPhase !== "ACTION" || state.actionTaken) return;
 
         const key = hexKey(coords);
         const legal = getLegalActions(state, mapHexSet);
         const selectedDie = selectedDieId ? state.dice[selectedDieId] : null;
+        const preferTowerMove = opts.preferTowerMove === true;
 
         // Try to match a legal action whose destination is the clicked hex
         for (const action of legal) {
@@ -110,7 +114,8 @@ export default function GameView() {
         const top = getTopDie(state.dice, coords);
         if (top && top.owner === activePlayer) {
             setSelectedDieId(top.id);
-            setTowerMoveMode(false); // Single-die selection clears tower-move mode
+            // Tower body click selects in tower-move mode; top die / hex grass do not.
+            setTowerMoveMode(preferTowerMove);
         } else if (state.turnPhase === "ACTION" && !state.actionTaken) {
             // Clicked a hex that isn't a legal move target and holds no friendly
             // die — treat as a deselect, mirroring an outside-board click.

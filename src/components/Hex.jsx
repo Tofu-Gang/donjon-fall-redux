@@ -4,11 +4,11 @@ import {
     DIE_TOWER_SIZES,
 } from "style-guide-donjon-fall/donjon";
 import Die from "./Die.jsx";
-import TowerStack from "./TowerStack.jsx";
+import DiceTower from "./DiceTower.jsx";
 
 /**
  * Single hex cell: draws the tile (with state/owner styling) and, on top, the dice sitting there.
- * Stacks of 2+ dice are rendered via TowerStack; a single die is rendered directly. Empty hexes just show the tile.
+ * Stacks of 2+ dice use the DiceTower adapter; a single die is rendered directly. Empty hexes just show the tile.
  *
  * Hex/die geometry and pairing come from donjon-fall-ui
  * (`HEX_TILE_SIZES`, `DIE_TOWER_SIZES`).
@@ -23,15 +23,33 @@ export default function Hex({
     dieSize,
     texture,
     onClickAt,
+    onTowerTopClick,
+    onTowerBodyClick,
     getDieState,
 }) {
     const { w, h } = HEX_TILE_SIZES[hexSize];
     const stack = dice.length > 1;
     const dieCfg = DIE_TOWER_SIZES[dieSize];
+    const coords = dice[0]?.coords;
+    const towerSelected = stack
+        && dice.some((die) => (getDieState?.(die) ?? "default") === "selected");
 
     // Build the die overlay: a stack, a lone die, or nothing for an empty hex.
     const dieOverlay = stack ? (
-        <TowerStack dice={dice} size={dieSize} getDieState={getDieState} />
+        <DiceTower
+            dice={dice}
+            size={dieSize}
+            selected={towerSelected}
+            getDieState={getDieState}
+            onTopClick={(event) => {
+                event.stopPropagation();
+                onTowerTopClick?.(coords);
+            }}
+            onTowerClick={(event) => {
+                event.stopPropagation();
+                onTowerBodyClick?.(coords);
+            }}
+        />
     ) : dice.length === 1 ? (
         <Die
             faceValue={dice[0].faceValue}
@@ -41,10 +59,9 @@ export default function Hex({
         />
     ) : null;
 
-    // Vertical offset that places the stack so its visible top sits at the hex's vertical center,
-    // accounting for the cumulative peek height of all dice below the top one.
+    // Align bottom-die center with hex vertical center (DicePage TowerOnHex formula).
     const towerTopOffset = stack
-        ? h / 2 - (((dice.length - 1) * dieCfg.peek + dieCfg.box / 2))
+        ? h / 2 - ((dice.length - 1) * dieCfg.peek + dieCfg.box / 2)
         : undefined;
 
     return (
@@ -53,11 +70,11 @@ export default function Hex({
             onClick={(event) => {
                 // Empty hexes have nothing to click — let the click bubble up to the board.
                 if (dice.length === 0) return;
-                // Treat the click as a click on this hex so the parent handler can
-                // first try a legal move to the top die here, and only fall back to selection.
-                // Prevent the click from also registering as a click on the board.
+                // Lone die / hex grass under a stack: treat as a hex click so the parent
+                // can try a legal move first, then fall back to die selection.
+                // Tower top/body clicks stopPropagation in DiceTower handlers above.
                 event.stopPropagation();
-                onClickAt?.(dice[0].coords);
+                onClickAt?.(coords);
             }}
         >
             <HexTile

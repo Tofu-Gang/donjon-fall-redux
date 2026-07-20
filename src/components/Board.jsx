@@ -171,6 +171,8 @@ export default function Board({
                             dieSize={DIE_SIZE}
                             texture={texture}
                             onClickAt={onHexClick}
+                            onTowerTopClick={(c) => onHexClick?.(c, { preferTowerMove: false })}
+                            onTowerBodyClick={(c) => onHexClick?.(c, { preferTowerMove: true })}
                             getDieState={(die) =>
                                 die.id === selectedDieId ? "selected" : "default"
                             }
