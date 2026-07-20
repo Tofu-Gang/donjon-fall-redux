@@ -1,19 +1,17 @@
-import { HexTile } from "style-guide-donjon-fall/donjon";
-import { hexDims } from "./hexLayout.js";
+import {
+    HexTile,
+    HEX_TILE_SIZES,
+    DIE_TOWER_SIZES,
+} from "style-guide-donjon-fall/donjon";
 import Die from "./Die.jsx";
 import TowerStack from "./TowerStack.jsx";
-
-// Visual config for stacked dice per die-size tier: full die width and the "peek" height of each visible segment.
-const towerSizeConfig = {
-    xs: { box: 24, peek: 10 },
-    sm: { box: 32, peek: 16 },
-    md: { box: 48, peek: 20 },
-    lg: { box: 64, peek: 26 },
-};
 
 /**
  * Single hex cell: draws the tile (with state/owner styling) and, on top, the dice sitting there.
  * Stacks of 2+ dice are rendered via TowerStack; a single die is rendered directly. Empty hexes just show the tile.
+ *
+ * Hex/die geometry and pairing come from donjon-fall-ui
+ * (`HEX_TILE_SIZES`, `DIE_TOWER_SIZES`).
  */
 export default function Hex({
     property = "empty",
@@ -21,18 +19,15 @@ export default function Hex({
     state = "default",
     owner = null,
     dice = [],
-    hexSize = "md",
-    dieSize = "xs",
+    hexSize,
+    dieSize,
     texture,
     onClickAt,
     getDieState,
 }) {
-    // Resolve hex dimensions with a safe fallback to "md" if an unknown size is passed.
-    const { w, h } = hexDims[hexSize] ?? hexDims.md;
-    // Stacks are anything with 2+ dice; a single die is rendered flat (no peek).
+    const { w, h } = HEX_TILE_SIZES[hexSize];
     const stack = dice.length > 1;
-    // Same fallback strategy for the per-die-size tower config.
-    const dieCfg = towerSizeConfig[dieSize] ?? towerSizeConfig.xs;
+    const dieCfg = DIE_TOWER_SIZES[dieSize];
 
     // Build the die overlay: a stack, a lone die, or nothing for an empty hex.
     const dieOverlay = stack ? (

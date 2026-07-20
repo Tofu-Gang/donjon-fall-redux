@@ -1,22 +1,15 @@
+import { DIE_TOWER_SIZES } from "style-guide-donjon-fall/donjon";
 import Die from "./Die.jsx";
-
-// Visual config for stacked dice per size tier: full die width and the "peek" height of each visible segment.
-// Kept in sync with the same map in Hex.jsx — both files consume it for the same rendering math.
-const towerSizeConfig = {
-    xs: { box: 24, peek: 10 },
-    sm: { box: 32, peek: 16 },
-    md: { box: 48, peek: 20 },
-    lg: { box: 64, peek: 26 },
-};
 
 /**
  * Renders a vertical stack of dice (a "tower"). The bottom die is drawn first and
  * each subsequent die overlaps it by `box - peek` pixels, leaving a small peek of
  * the dice below visible at the top of the stack.
+ *
+ * Size geometry comes from donjon-fall-ui `DIE_TOWER_SIZES` (box mirrors DieFace).
  */
-export default function TowerStack({ dice, size = "xs", getDieState }) {
-    // Safe fallback to "xs" config when an unknown size is passed.
-    const cfg = towerSizeConfig[size] ?? towerSizeConfig.xs;
+export default function TowerStack({ dice, size, getDieState }) {
+    const cfg = DIE_TOWER_SIZES[size];
     // Sort bottom-up by stackIndex so the visual order matches the logical stack order.
     const ordered = [...dice].sort((a, b) => a.stackIndex - b.stackIndex);
 

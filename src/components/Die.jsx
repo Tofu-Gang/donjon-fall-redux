@@ -1,6 +1,6 @@
 import { DieFace, playerColorsByKey } from "style-guide-donjon-fall/donjon";
 
-export default function Die({ faceValue, owner, state = "default", size = "xs" }) {
+export default function Die({ faceValue, owner, state = "default", size }) {
     const playerColor = playerColorsByKey[owner]?.primary;
 
     return (

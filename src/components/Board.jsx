@@ -1,14 +1,14 @@
 import { useMemo } from "react";
+import { boardPieceSizes } from "style-guide-donjon-fall/donjon";
 import { hexCoords, hexKey, hexToPixel } from "../logic/hex.js";
 import { getDiceAtHex, getTopDie } from "../logic/dice.js";
 import { getLegalActions } from "../logic/actions.js";
 import Hex from "./Hex.jsx";
-import { getOwnerColor, hexDims } from "./hexLayout.js";
+import { getOwnerColor } from "./hexLayout.js";
 
-// Hex layout uses the medium size's height as the pixel radius for placement.
-const HEX_LAYOUT_SIZE = hexDims.md.h / 2;
-const HEX_SIZE = "md";
-const DIE_SIZE = "xs";
+// Board hex tier — die size + px geometry come from donjon-fall-ui boardPieceSizes().
+const { hexSize: HEX_SIZE, dieSize: DIE_SIZE, hex: HEX_DIMS } = boardPieceSizes("md");
+const HEX_LAYOUT_SIZE = HEX_DIMS.h / 2;
 
 /**
  * Renders the hex grid for the current map, layering dice, base colors, focal points,
@@ -105,7 +105,7 @@ export default function Board({
         const maxX = Math.max(...positions.map((p) => p.pixel.x));
         const minY = Math.min(...positions.map((p) => p.pixel.y));
         const maxY = Math.max(...positions.map((p) => p.pixel.y));
-        const pad = hexDims[HEX_SIZE].w;
+        const pad = HEX_DIMS.w;
         return {
             positions,
             width: maxX - minX + pad * 2,
@@ -156,8 +156,8 @@ export default function Board({
                         key={key}
                         style={{
                             position: "absolute",
-                            left: pixel.x + layout.offsetX - hexDims[HEX_SIZE].w / 2,
-                            top: pixel.y + layout.offsetY - hexDims[HEX_SIZE].h / 2,
+                            left: pixel.x + layout.offsetX - HEX_DIMS.w / 2,
+                            top: pixel.y + layout.offsetY - HEX_DIMS.h / 2,
                         }}
                         onClick={() => onHexClick?.(coords)}
                     >
