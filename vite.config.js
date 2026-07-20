@@ -16,6 +16,12 @@ export default defineConfig({
     resolve: {
         alias: {
             "style-guide-donjon-fall/tkajui": resolve(styleGuide, "src/lib/tkajui/index.js"),
+            // textures subpath MUST be listed before the exact `…/donjon` alias,
+            // or Vite would resolve `…/donjon/textures` to index.js.
+            // Unlike tokens/enums (tsup → dist), textures.js is imported as
+            // source next to textures/*.jpg — different from the usual lib
+            // export pipeline; see style-guide donjon/textures.js header.
+            "style-guide-donjon-fall/donjon/textures": resolve(styleGuide, "src/lib/donjon/textures.js"),
             "style-guide-donjon-fall/donjon": resolve(styleGuide, "src/lib/donjon/index.js"),
             react: resolve(rootDir, "node_modules/react"),
             "react-dom": resolve(rootDir, "node_modules/react-dom")

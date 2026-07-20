@@ -21,6 +21,7 @@ export default function Board({
     selectedDieId,
     towerMoveMode,
     onHexClick,
+    texture,
 }) {
     // Player whose turn it is (derived from turn order and current index)
     const activePlayer = state.turnOrder[state.currentTurnIndex];
@@ -168,6 +169,7 @@ export default function Board({
                             dice={dice}
                             hexSize={HEX_SIZE}
                             dieSize={DIE_SIZE}
+                            texture={texture}
                             onClickAt={onHexClick}
                             getDieState={(die) =>
                                 die.id === selectedDieId ? "selected" : "default"

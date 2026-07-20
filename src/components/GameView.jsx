@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
+// Grass URLs come from donjon-fall-ui's `./textures` subpath — not the main
+// barrel (`…/donjon`). That subpath is an intentional exception to the usual
+// tsup→dist export pattern (tokens/enums/playerColors): it ships as source
+// next to JPG files so `import.meta.url` keeps working. See textures.js in
+// the style-guide package for the full rationale.
+import { grassTile1024 } from "style-guide-donjon-fall/donjon/textures";
 import { useGame } from "../context/useGame.js";
 import { getLegalActions } from "../logic/actions.js";
 import { hexKey } from "../logic/hex.js";
@@ -6,6 +12,16 @@ import { getTopDie } from "../logic/dice.js";
 import mapData from "../maps/default.json";
 import Board from "./Board.jsx";
 import ActionPanel from "./ActionPanel.jsx";
+
+/**
+ * ScreensPage desktop convention: 1024 JPG as a 256×256 repeating tile
+ * (not stretched to the viewport). Same URL is passed to HexTile below.
+ */
+const GRASS_SCREEN_STYLE = {
+    backgroundImage: `url(${grassTile1024})`,
+    backgroundSize: "256px 256px",
+    backgroundRepeat: "repeat",
+};
 
 /**
  * Main play screen: wires game context to the board and action panel,
@@ -145,6 +161,7 @@ export default function GameView() {
     return (
         <div
             className="flex min-h-screen flex-col items-center gap-6 p-4"
+            style={GRASS_SCREEN_STYLE}
             onClick={handleBackgroundClick}
         >
             {/* Turn status, action buttons, and combat choices (turn ends automatically) */}
@@ -169,6 +186,7 @@ export default function GameView() {
                 selectedDieId={selectedDieId}
                 towerMoveMode={towerMoveMode}
                 onHexClick={handleHexClick}
+                texture={grassTile1024}
             />
         </div>
     );

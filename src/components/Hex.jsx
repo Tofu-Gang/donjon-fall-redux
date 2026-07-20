@@ -23,6 +23,7 @@ export default function Hex({
     dice = [],
     hexSize = "md",
     dieSize = "xs",
+    texture,
     onClickAt,
     getDieState,
 }) {
@@ -70,6 +71,7 @@ export default function Hex({
                 state={state}
                 owner={owner}
                 size={hexSize}
+                texture={texture}
             />
             {dieOverlay && (
                 <div
