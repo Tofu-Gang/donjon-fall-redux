@@ -21,6 +21,7 @@ export default function Board({
     selectedDieId,
     towerMoveMode,
     onHexClick,
+    onDeselect,
     texture,
 }) {
     // Player whose turn it is (derived from turn order and current index)
@@ -124,6 +125,9 @@ export default function Board({
                 height: layout.height,
                 margin: "0 auto",
             }}
+            // Gaps between hexes share the board bounding box with the page grass;
+            // clear selection there so "click away" works inside the board chrome.
+            onClick={() => onDeselect?.()}
         >
             {layout.positions.map(({ key, pixel }) => {
                 const coords = hexCoords(key);
@@ -166,7 +170,11 @@ export default function Board({
                             top: pixel.y + layout.offsetY - HEX_DIMS.h / 2,
                             cursor: interactionState === "blocked" ? "not-allowed" : undefined,
                         }}
-                        onClick={() => onHexClick?.(coords)}
+                        onClick={(event) => {
+                            // Keep hex handling off the board-chrome deselect handler.
+                            event.stopPropagation();
+                            onHexClick?.(coords);
+                        }}
                     >
                         <Hex
                             property={property}

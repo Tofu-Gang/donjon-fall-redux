@@ -69,11 +69,19 @@ export default function GameView() {
     }, [state.turnPhase, state.actionTaken, state.pendingCombat, state.currentTurnIndex, winner, endTurn]);
 
     /**
+     * Clears die selection and tower-move mode. Used by page background,
+     * board chrome (gaps around hexes), and unreachable hex/die clicks.
+     */
+    const clearSelection = useCallback(() => {
+        setSelectedDieId(null);
+        setTowerMoveMode(false);
+    }, []);
+
+    /**
      * Click handler shared by hexes and dice: tries a legal move to the clicked
-     * hex first, then falls back to selecting the top friendly die there.
-     * Die clicks and empty-hex clicks both go through this path so clicking a
-     * friendly die as a move target actually performs the move (instead of
-     * just selecting that die).
+     * hex first. If a die is already selected and the click is not a legal move
+     * target, clears selection (unreachable / blocked hex or die). Otherwise
+     * falls back to selecting the top friendly die there.
      *
      * @param {object} coords - Axial coords of the clicked hex.
      * @param {{ preferTowerMove?: boolean }} [opts] - From DiceTower split click:
@@ -105,22 +113,23 @@ export default function GameView() {
             if (destKey !== key) continue;
             // Found a matching legal move — execute and clear selection
             performAction(action);
-            setSelectedDieId(null);
-            setTowerMoveMode(false);
+            clearSelection();
             return;
         }
 
-        // No move matched — treat click as die selection on this hex
+        // Already selected and this hex/die is not a legal destination — deselect
+        // (covers blocked empty hexes, enemy dice, and other friendly pieces).
+        if (selectedDieId) {
+            clearSelection();
+            return;
+        }
+
+        // Nothing selected — select the top friendly die on this hex, if any
         const top = getTopDie(state.dice, coords);
         if (top && top.owner === activePlayer) {
             setSelectedDieId(top.id);
             // Tower body click selects in tower-move mode; top die / hex grass do not.
             setTowerMoveMode(preferTowerMove);
-        } else if (state.turnPhase === "ACTION" && !state.actionTaken) {
-            // Clicked a hex that isn't a legal move target and holds no friendly
-            // die — treat as a deselect, mirroring an outside-board click.
-            setSelectedDieId(null);
-            setTowerMoveMode(false);
         }
     }, [
         state,
@@ -129,6 +138,7 @@ export default function GameView() {
         towerMoveMode,
         activePlayer,
         performAction,
+        clearSelection,
     ]);
 
     /**
@@ -139,9 +149,8 @@ export default function GameView() {
      */
     const handleBackgroundClick = useCallback((event) => {
         if (event.target !== event.currentTarget) return;
-        setSelectedDieId(null);
-        setTowerMoveMode(false);
-    }, []);
+        clearSelection();
+    }, [clearSelection]);
 
     /**
      * Reroll the selected die (uses the player's one action for the turn).
@@ -149,8 +158,8 @@ export default function GameView() {
     const handleReroll = useCallback(() => {
         if (!selectedDieId) return;
         performAction({ type: "REROLL", dieId: selectedDieId });
-        setSelectedDieId(null);
-    }, [selectedDieId, performAction]);
+        clearSelection();
+    }, [selectedDieId, performAction, clearSelection]);
 
     /**
      * Collapse the tower at the selected die's hex onto adjacent lower dice.
@@ -159,9 +168,8 @@ export default function GameView() {
         const die = selectedDieId ? state.dice[selectedDieId] : null;
         if (!die) return;
         performAction({ type: "TOWER_COLLAPSE", coords: die.coords });
-        setSelectedDieId(null);
-        setTowerMoveMode(false);
-    }, [selectedDieId, state.dice, performAction]);
+        clearSelection();
+    }, [selectedDieId, state.dice, performAction, clearSelection]);
 
     return (
         <div
@@ -191,6 +199,7 @@ export default function GameView() {
                 selectedDieId={selectedDieId}
                 towerMoveMode={towerMoveMode}
                 onHexClick={handleHexClick}
+                onDeselect={clearSelection}
                 texture={grassTile1024}
             />
         </div>
