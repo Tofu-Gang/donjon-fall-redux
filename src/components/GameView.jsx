@@ -5,13 +5,21 @@ import { useCallback, useEffect, useState } from "react";
 // next to JPG files so `import.meta.url` keeps working. See textures.js in
 // the style-guide package for the full rationale.
 import { grassTile1024 } from "style-guide-donjon-fall/donjon/textures";
+import {
+    DonjonButton,
+    DonjonModal,
+    playerColorsByKey,
+} from "style-guide-donjon-fall/donjon";
 import { useGame } from "../context/useGame.js";
 import { getLegalActions } from "../logic/actions.js";
 import { hexKey } from "../logic/hex.js";
 import { getTopDie } from "../logic/dice.js";
 import mapData from "../maps/default.json";
 import Board from "./Board.jsx";
+import ScoreHeader from "./ScoreHeader.jsx";
 import ActionPanel from "./ActionPanel.jsx";
+
+const PLAYER_LABELS = { red: "Red", blue: "Blue" };
 
 /**
  * ScreensPage desktop convention: 1024 JPG as a 256×256 repeating tile
@@ -171,18 +179,33 @@ export default function GameView() {
         clearSelection();
     }, [selectedDieId, state.dice, performAction, clearSelection]);
 
+    const reasonLabel = {
+        SCORE: "Victory points",
+        SUDDEN_DEATH: "Sudden death",
+    }[reason] ?? reason;
+
     return (
         <div
-            className="flex min-h-screen flex-col items-center gap-6 p-4"
+            className="flex min-h-screen flex-col items-center p-4"
             style={GRASS_SCREEN_STYLE}
             onClick={handleBackgroundClick}
         >
-            {/* Turn status, action buttons, and combat choices (turn ends automatically) */}
+            <ScoreHeader state={state} />
+            <div className="flex w-full flex-1 items-center justify-center overflow-hidden">
+                <Board
+                    mapData={mapData}
+                    state={state}
+                    mapHexSet={mapHexSet}
+                    selectedDieId={selectedDieId}
+                    towerMoveMode={towerMoveMode}
+                    onHexClick={handleHexClick}
+                    onDeselect={clearSelection}
+                    texture={grassTile1024}
+                />
+            </div>
             <ActionPanel
                 state={state}
                 mapHexSet={mapHexSet}
-                winner={winner}
-                reason={reason}
                 selectedDieId={selectedDieId}
                 towerMoveMode={towerMoveMode}
                 onTowerMoveModeChange={setTowerMoveMode}
@@ -191,17 +214,23 @@ export default function GameView() {
                 onPush={() => resolveCombat("PUSH")}
                 onOccupy={() => resolveCombat("OCCUPY")}
             />
-            {/* Interactive hex grid; clicks on dice and empty hexes share one handler. */}
-            <Board
-                mapData={mapData}
-                state={state}
-                mapHexSet={mapHexSet}
-                selectedDieId={selectedDieId}
-                towerMoveMode={towerMoveMode}
-                onHexClick={handleHexClick}
-                onDeselect={clearSelection}
-                texture={grassTile1024}
-            />
+            <DonjonModal
+                open={Boolean(winner)}
+                onClose={() => {}}
+                title="Game Over"
+                footer={
+                    <DonjonButton onClick={() => window.location.reload()}>
+                        New Game
+                    </DonjonButton>
+                }
+            >
+                <p>
+                    <strong style={{ color: playerColorsByKey[winner]?.primary }}>
+                        {PLAYER_LABELS[winner]}
+                    </strong>{" "}
+                    wins ({reasonLabel}).
+                </p>
+            </DonjonModal>
         </div>
     );
 }

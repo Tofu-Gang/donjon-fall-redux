@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import ActionPanel from "./ActionPanel.jsx";
 
 function makeState(overrides = {}) {
@@ -8,6 +8,7 @@ function makeState(overrides = {}) {
         players: { red: 0, blue: 0 },
         turnOrder: ["red", "blue"],
         currentTurnIndex: 0,
+        turnNumber: 1,
         turnPhase: "ACTION",
         focalPointsGroups: {},
         pendingCombat: null,
@@ -35,8 +36,6 @@ describe("ActionPanel — combat choices", () => {
                     },
                 })}
                 mapHexSet={new Set()}
-                winner={null}
-                reason={null}
                 selectedDieId={null}
                 towerMoveMode={false}
                 onTowerMoveModeChange={() => {}}
@@ -47,10 +46,10 @@ describe("ActionPanel — combat choices", () => {
             />
         );
 
-        fireEvent.click(screen.getByRole("button", { name: "Push" }));
+        fireEvent.click(within(screen.getByLabelText("Push")).getByRole("button"));
         expect(onPush).toHaveBeenCalledOnce();
 
-        fireEvent.click(screen.getByRole("button", { name: "Occupy" }));
+        fireEvent.click(within(screen.getByLabelText("Occupy")).getByRole("button"));
         expect(onOccupy).toHaveBeenCalledOnce();
     });
 
@@ -68,8 +67,6 @@ describe("ActionPanel — combat choices", () => {
                     },
                 })}
                 mapHexSet={new Set()}
-                winner={null}
-                reason={null}
                 selectedDieId={null}
                 towerMoveMode={false}
                 onTowerMoveModeChange={() => {}}
@@ -80,7 +77,7 @@ describe("ActionPanel — combat choices", () => {
             />
         );
 
-        expect(screen.getByRole("button", { name: "Push" })).toBeInTheDocument();
-        expect(screen.queryByRole("button", { name: "Occupy" })).not.toBeInTheDocument();
+        expect(screen.getByLabelText("Push")).toBeInTheDocument();
+        expect(screen.queryByLabelText("Occupy")).not.toBeInTheDocument();
     });
 });

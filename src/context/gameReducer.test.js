@@ -30,6 +30,7 @@ function makeState(overrides = {}) {
         players: { red: 0, blue: 0 },
         turnOrder: ["red", "blue"],
         currentTurnIndex: 0,
+        turnNumber: 1,
         turnPhase: "ACTION",
         focalPointsGroups: {},
         turnContext: null,
@@ -342,6 +343,7 @@ describe("createReducer — END_TURN", () => {
         const state = makeState({ currentTurnIndex: 0, turnPhase: "ACTION", actionTaken: true });
         const next = reducer(state, { type: "END_TURN" });
         expect(next.currentTurnIndex).toBe(1);
+        expect(next.turnNumber).toBe(2);
         expect(next.turnPhase).toBe("FOCAL");
         expect(next.actionTaken).toBe(false);
     });

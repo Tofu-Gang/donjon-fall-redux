@@ -114,6 +114,7 @@ export function buildInitialState(mapData, randomizeDice, rollFn = rollD6) {
         players: { red: 0, blue: 0 },
         turnOrder: ["red", "blue"],
         currentTurnIndex: 0,
+        turnNumber: 1,
         turnPhase: "FOCAL",
         focalPointsGroups,
         turnContext: null,
@@ -335,6 +336,7 @@ export function createReducer(mapHexSet, rollFn = rollD6) {
                 return {
                     ...state,
                     currentTurnIndex: nextIndex,
+                    turnNumber: state.turnNumber + 1,
                     turnPhase: "FOCAL",
                     turnContext: null,
                     pendingCombat: null,

@@ -22,6 +22,7 @@ export default defineConfig({
             // source next to textures/*.jpg — different from the usual lib
             // export pipeline; see style-guide donjon/textures.js header.
             "style-guide-donjon-fall/donjon/textures": resolve(styleGuide, "src/lib/donjon/textures.js"),
+            "style-guide-donjon-fall/donjon/icons": resolve(styleGuide, "src/lib/donjon/icons.jsx"),
             "style-guide-donjon-fall/donjon": resolve(styleGuide, "src/lib/donjon/index.js"),
             react: resolve(rootDir, "node_modules/react"),
             "react-dom": resolve(rootDir, "node_modules/react-dom")
