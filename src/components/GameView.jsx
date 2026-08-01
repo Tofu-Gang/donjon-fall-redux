@@ -13,7 +13,14 @@ import {
 import { useGame } from "../context/useGame.js";
 import { getLegalActions } from "../logic/actions.js";
 import { hexKey } from "../logic/hex.js";
-import { getTopDie } from "../logic/dice.js";
+import { getDiceAtHex, getTopDie } from "../logic/dice.js";
+import {
+    hexPixelDelta,
+    isCombatMove,
+    pickDieMovePreset,
+    previewFocalScores,
+} from "../fx/boardFx.js";
+import useBoardFx from "../fx/useBoardFx.js";
 import mapData from "../maps/default.json";
 import Board from "./Board.jsx";
 import ScoreHeader from "./ScoreHeader.jsx";
@@ -36,68 +43,159 @@ const GRASS_SCREEN_STYLE = {
  * handles die selection, hex clicks, and automatic focal-point evaluation.
  */
 export default function GameView() {
-    // Destructure everything the view needs from the game context
     const {
-        state,              // Full game state (dice, turn, phase, etc.)
-        mapHexSet,          // Set of valid hex keys on the current map
-        winner,             // Winning player id, or null if game ongoing
-        reason,             // Win condition description when game ends
-        evaluateFocalPoints,// Runs focal scoring at start of each turn
-        performAction,      // Dispatches a player action (move, reroll, collapse, …)
-        resolveCombat,      // Resolves a combat with PUSH or OCCUPY
-        endTurn,            // Advances to the next player / turn phase
+        state,
+        mapHexSet,
+        winner,
+        reason,
+        evaluateFocalPoints,
+        performAction,
+        resolveCombat,
+        endTurn,
     } = useGame();
 
-    // Id of the die the active player has selected for an action, or null
     const [selectedDieId, setSelectedDieId] = useState(null);
-    // When true, the next hex click tries to move the whole tower, not one die
     const [towerMoveMode, setTowerMoveMode] = useState(false);
+    const { fx, busy, play, complete } = useBoardFx();
 
-    // Player whose turn it is (derived from turn order and current index)
     const activePlayer = state.turnOrder[state.currentTurnIndex];
+    const stuckOwner = reason === "SUDDEN_DEATH"
+        ? state.turnOrder[state.currentTurnIndex]
+        : null;
 
-    // At the start of each turn, automatically score focal points before actions
+    // Focal scoring — pulse + VP feedback + reroll spin, then commit.
     useEffect(() => {
-        if (winner) return; // Game over — skip focal evaluation
-        if (state.turnPhase === "FOCAL") {
-            evaluateFocalPoints();
-        }
-    }, [state.turnPhase, state.currentTurnIndex, winner, evaluateFocalPoints]);
+        if (winner) return;
+        if (state.turnPhase !== "FOCAL") return;
 
-    // Once the action is fully resolved (taken, no pending combat, back in ACTION),
-    // hand the turn over to the next player — no manual End Turn click required.
+        let cancelled = false;
+        const hits = previewFocalScores(state);
+        (async () => {
+            if (hits.length > 0) {
+                await play({
+                    hideDieIds: hits.map((h) => h.die.id),
+                    items: [
+                        ...hits.map((h) => ({
+                            type: "hexPulse",
+                            atKey: hexKey(h.coords),
+                            preset: "hexFocalPulse",
+                        })),
+                        ...hits.map((h) => ({
+                            type: "piece",
+                            atKey: hexKey(h.coords),
+                            dice: [h.die],
+                            preset: "dieRerollSpin",
+                        })),
+                        ...hits.map((h) => ({
+                            type: "feedback",
+                            atKey: hexKey(h.coords),
+                            text: "+1 VP",
+                            variant: "vp",
+                        })),
+                    ],
+                });
+            }
+            if (!cancelled) evaluateFocalPoints();
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+        // Intentionally keyed to FOCAL entry only (turn identity).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [state.turnPhase, state.turnNumber, winner]);
+
+    // Hand the turn over once the action is done and FX have finished.
     useEffect(() => {
-        if (winner) return; // Game over — let the modal stand
+        if (winner || busy) return;
         const actionDone = state.turnPhase === "ACTION"
             && state.actionTaken
             && !state.pendingCombat;
-        if (actionDone) {
-            endTurn();
-        }
-    }, [state.turnPhase, state.actionTaken, state.pendingCombat, state.currentTurnIndex, winner, endTurn]);
+        if (actionDone) endTurn();
+    }, [
+        state.turnPhase,
+        state.actionTaken,
+        state.pendingCombat,
+        state.currentTurnIndex,
+        winner,
+        busy,
+        endTurn,
+    ]);
 
-    /**
-     * Clears die selection and tower-move mode. Used by page background,
-     * board chrome (gaps around hexes), and unreachable hex/die clicks.
-     */
     const clearSelection = useCallback(() => {
         setSelectedDieId(null);
         setTowerMoveMode(false);
     }, []);
 
+    const playReject = useCallback(async (die) => {
+        if (!die || busy) return;
+        await play({
+            hideDieIds: [die.id],
+            items: [{
+                atKey: hexKey(die.coords),
+                dice: [die],
+                preset: "dieReject",
+            }],
+        });
+    }, [busy, play]);
+
+    const runMoveAction = useCallback(async (action) => {
+        const intoCombat = isCombatMove(state, action);
+
+        // Combat entry keeps the attacker in place — no travel FX (resolve animates later).
+        if (intoCombat) {
+            performAction(action);
+            clearSelection();
+            return;
+        }
+
+        const from = action.type === "MOVE_TOWER"
+            ? action.coords
+            : state.dice[action.dieId].coords;
+        const to = action.path[action.path.length - 1];
+        const { dx, dy } = hexPixelDelta(from, to);
+
+        let hideDieIds;
+        let diceSnap;
+        let preset;
+
+        if (action.type === "MOVE_TOWER") {
+            diceSnap = getDiceAtHex(state.dice, from);
+            hideDieIds = diceSnap.map((d) => d.id);
+            preset = "dieMove";
+        } else {
+            const die = state.dice[action.dieId];
+            diceSnap = [die];
+            hideDieIds = [die.id];
+            preset = pickDieMovePreset({
+                dice: state.dice,
+                dieId: action.dieId,
+                path: action.path,
+            });
+        }
+
+        await play({
+            hideDieIds,
+            items: [{
+                atKey: hexKey(from),
+                dice: diceSnap,
+                preset,
+                dx,
+                dy,
+            }],
+        });
+        performAction(action);
+        clearSelection();
+    }, [state, performAction, clearSelection, play]);
+
     /**
      * Click handler shared by hexes and dice: tries a legal move to the clicked
      * hex first. If a die is already selected and the click is not a legal move
-     * target, clears selection (unreachable / blocked hex or die). Otherwise
-     * falls back to selecting the top friendly die there.
-     *
-     * @param {object} coords - Axial coords of the clicked hex.
-     * @param {{ preferTowerMove?: boolean }} [opts] - From DiceTower split click:
-     *   top die → preferTowerMove false; tower peeks → true. Omitted for hex /
-     *   lone-die clicks (always die-move selection).
+     * target, plays reject feedback. Otherwise falls back to selecting the top
+     * friendly die there.
      */
     const handleHexClick = useCallback((coords, opts = {}) => {
-        // Actions are only allowed once per turn, during the ACTION phase
+        if (busy) return;
         if (state.turnPhase !== "ACTION" || state.actionTaken) return;
 
         const key = hexKey(coords);
@@ -105,79 +203,142 @@ export default function GameView() {
         const selectedDie = selectedDieId ? state.dice[selectedDieId] : null;
         const preferTowerMove = opts.preferTowerMove === true;
 
-        // Try to match a legal action whose destination is the clicked hex
         for (const action of legal) {
             if (towerMoveMode) {
-                // Tower move: action must move the stack at the selected die's hex
                 if (action.type !== "MOVE_TOWER") continue;
                 if (!selectedDie || hexKey(action.coords) !== hexKey(selectedDie.coords)) continue;
             } else if (action.type === "MOVE_DIE") {
-                // Single-die move: action must use the currently selected die
                 if (action.dieId !== selectedDieId) continue;
             } else {
                 continue;
             }
             const destKey = hexKey(action.path[action.path.length - 1]);
             if (destKey !== key) continue;
-            // Found a matching legal move — execute and clear selection
-            performAction(action);
-            clearSelection();
+            void runMoveAction(action);
             return;
         }
 
-        // Already selected and this hex/die is not a legal destination — deselect
-        // (covers blocked empty hexes, enemy dice, and other friendly pieces).
         if (selectedDieId) {
-            clearSelection();
+            // Blocked / illegal target — shake the selected die, keep selection.
+            void playReject(selectedDie);
             return;
         }
 
-        // Nothing selected — select the top friendly die on this hex, if any
         const top = getTopDie(state.dice, coords);
         if (top && top.owner === activePlayer) {
             setSelectedDieId(top.id);
-            // Tower body click selects in tower-move mode; top die / hex grass do not.
             setTowerMoveMode(preferTowerMove);
         }
     }, [
+        busy,
         state,
         mapHexSet,
         selectedDieId,
         towerMoveMode,
         activePlayer,
+        runMoveAction,
+        playReject,
+    ]);
+
+    const handleBackgroundClick = useCallback((event) => {
+        if (event.target !== event.currentTarget) return;
+        if (busy) return;
+        clearSelection();
+    }, [clearSelection, busy]);
+
+    const handleReroll = useCallback(async () => {
+        if (!selectedDieId || busy) return;
+        const die = state.dice[selectedDieId];
+        await play({
+            hideDieIds: [die.id],
+            items: [{
+                atKey: hexKey(die.coords),
+                dice: [die],
+                preset: "dieRerollSpin",
+            }],
+        });
+        performAction({ type: "REROLL", dieId: selectedDieId });
+        clearSelection();
+    }, [selectedDieId, busy, state.dice, play, performAction, clearSelection]);
+
+    const handleTowerCollapse = useCallback(async () => {
+        const die = selectedDieId ? state.dice[selectedDieId] : null;
+        if (!die || busy) return;
+        const stack = getDiceAtHex(state.dice, die.coords);
+        const bottom = stack[0];
+        const isEnemy = bottom.owner !== activePlayer;
+        await play({
+            hideDieIds: [bottom.id],
+            items: [{
+                atKey: hexKey(die.coords),
+                dice: [bottom],
+                preset: "dieCollapse",
+                feedback: isEnemy ? { text: "+1 VP", variant: "vp" } : undefined,
+            }],
+        });
+        performAction({ type: "TOWER_COLLAPSE", coords: die.coords });
+        clearSelection();
+    }, [
+        selectedDieId,
+        busy,
+        state.dice,
+        activePlayer,
+        play,
         performAction,
         clearSelection,
     ]);
 
-    /**
-     * Click landed on the page background (anywhere not inside ActionPanel or
-     * Board). The flex root's items-center + p-4 puts the children centered
-     * with empty space around them; that empty space is part of this root, so
-     * the target === currentTarget guard fires only for genuine background clicks.
-     */
-    const handleBackgroundClick = useCallback((event) => {
-        if (event.target !== event.currentTarget) return;
-        clearSelection();
-    }, [clearSelection]);
+    const handleCombat = useCallback(async (resolution) => {
+        if (busy || !state.pendingCombat) return;
+        const { attackerCoords, defenderCoords, attackerDieId } = state.pendingCombat;
+        const attacker = state.dice[attackerDieId]
+            ?? getTopDie(state.dice, attackerCoords);
+        if (!attacker) {
+            resolveCombat(resolution);
+            return;
+        }
 
-    /**
-     * Reroll the selected die (uses the player's one action for the turn).
-     */
-    const handleReroll = useCallback(() => {
-        if (!selectedDieId) return;
-        performAction({ type: "REROLL", dieId: selectedDieId });
-        clearSelection();
-    }, [selectedDieId, performAction, clearSelection]);
+        // Phase 1 — impact shake + −1 on the attacker.
+        await play({
+            hideDieIds: [attacker.id],
+            items: [{
+                atKey: hexKey(attackerCoords),
+                dice: [attacker],
+                preset: "dieShake",
+                feedback: { text: "−1", variant: "loss" },
+            }],
+        });
 
-    /**
-     * Collapse the tower at the selected die's hex onto adjacent lower dice.
-     */
-    const handleTowerCollapse = useCallback(() => {
-        const die = selectedDieId ? state.dice[selectedDieId] : null;
-        if (!die) return;
-        performAction({ type: "TOWER_COLLAPSE", coords: die.coords });
-        clearSelection();
-    }, [selectedDieId, state.dice, performAction, clearSelection]);
+        if (resolution === "OCCUPY") {
+            const shaken = {
+                ...attacker,
+                faceValue: Math.max(attacker.faceValue - 1, 1),
+            };
+            await play({
+                hideDieIds: [attacker.id],
+                items: [{
+                    atKey: hexKey(defenderCoords),
+                    dice: [shaken],
+                    preset: "dieDrop",
+                }],
+            });
+        } else {
+            const defenderStack = getDiceAtHex(state.dice, defenderCoords);
+            const { dx, dy } = hexPixelDelta(attackerCoords, defenderCoords);
+            await play({
+                hideDieIds: defenderStack.map((d) => d.id),
+                items: [{
+                    atKey: hexKey(defenderCoords),
+                    dice: defenderStack,
+                    preset: "formationPushFull",
+                    dx,
+                    dy,
+                }],
+            });
+        }
+
+        resolveCombat(resolution);
+    }, [busy, state, play, resolveCombat]);
 
     const reasonLabel = {
         SCORE: "Victory points",
@@ -199,8 +360,11 @@ export default function GameView() {
                     selectedDieId={selectedDieId}
                     towerMoveMode={towerMoveMode}
                     onHexClick={handleHexClick}
-                    onDeselect={clearSelection}
+                    onDeselect={busy ? undefined : clearSelection}
                     texture={grassTile1024}
+                    fx={fx}
+                    onFxComplete={complete}
+                    stuckOwner={stuckOwner}
                 />
             </div>
             <ActionPanel
@@ -208,11 +372,11 @@ export default function GameView() {
                 mapHexSet={mapHexSet}
                 selectedDieId={selectedDieId}
                 towerMoveMode={towerMoveMode}
-                onTowerMoveModeChange={setTowerMoveMode}
+                onTowerMoveModeChange={busy ? () => {} : setTowerMoveMode}
                 onReroll={handleReroll}
                 onTowerCollapse={handleTowerCollapse}
-                onPush={() => resolveCombat("PUSH")}
-                onOccupy={() => resolveCombat("OCCUPY")}
+                onPush={() => void handleCombat("PUSH")}
+                onOccupy={() => void handleCombat("OCCUPY")}
             />
             <DonjonModal
                 open={Boolean(winner)}

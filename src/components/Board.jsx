@@ -1,14 +1,15 @@
 import { useMemo } from "react";
-import { boardPieceSizes } from "style-guide-donjon-fall/donjon";
+import { animationStyle, boardPieceSizes } from "style-guide-donjon-fall/donjon";
 import { hexCoords, hexKey, hexToPixel } from "../logic/hex.js";
 import { getDiceAtHex, getTopDie } from "../logic/dice.js";
 import { getLegalActions } from "../logic/actions.js";
+import { boardGeometryStyle, HEX_LAYOUT_SIZE, HEX_DIMS, hiddenDieIds } from "../fx/boardFx.js";
+import BoardFxOverlay from "../fx/BoardFxOverlay.jsx";
 import Hex from "./Hex.jsx";
 import { getOwnerColor } from "./hexLayout.js";
 
 // Board hex tier — die size + px geometry come from donjon-fall-ui boardPieceSizes().
-const { hexSize: HEX_SIZE, dieSize: DIE_SIZE, hex: HEX_DIMS } = boardPieceSizes("md");
-const HEX_LAYOUT_SIZE = HEX_DIMS.h / 2;
+const { hexSize: HEX_SIZE, dieSize: DIE_SIZE } = boardPieceSizes("md");
 
 /**
  * Renders the hex grid for the current map, layering dice, base colors, focal points,
@@ -23,9 +24,13 @@ export default function Board({
     onHexClick,
     onDeselect,
     texture,
+    fx = null,
+    onFxComplete,
+    stuckOwner = null,
 }) {
     // Player whose turn it is (derived from turn order and current index)
     const activePlayer = state.turnOrder[state.currentTurnIndex];
+    const hideIds = hiddenDieIds(fx);
 
     // Build lookup maps used to decorate each tile: base ownership and focal-point state.
     const { baseHexOwners, focalByKey } = useMemo(() => {
@@ -124,6 +129,7 @@ export default function Board({
                 width: layout.width,
                 height: layout.height,
                 margin: "0 auto",
+                ...boardGeometryStyle(),
             }}
             // Gaps between hexes share the board bounding box with the page grass;
             // clear selection there so "click away" works inside the board chrome.
@@ -131,7 +137,7 @@ export default function Board({
         >
             {layout.positions.map(({ key, pixel }) => {
                 const coords = hexCoords(key);
-                const dice = getDiceAtHex(state.dice, coords);
+                const dice = getDiceAtHex(state.dice, coords).filter((d) => !hideIds.has(d.id));
                 // HexTile uses three axes: property (what the cell is), focal sub-state,
                 // and interaction state (selected / move / attack). These compose instead
                 // of replacing each other.
@@ -160,6 +166,8 @@ export default function Board({
                 }
 
                 const dieVisualById = state.dieVisualById ?? {};
+                const stuckPulse = stuckOwner
+                    && dice.some((d) => d.owner === stuckOwner);
 
                 return (
                     <div
@@ -176,26 +184,35 @@ export default function Board({
                             onHexClick?.(coords);
                         }}
                     >
-                        <Hex
-                            property={property}
-                            focal={focal}
-                            state={interactionState}
-                            owner={owner}
-                            dice={dice}
-                            hexSize={HEX_SIZE}
-                            dieSize={DIE_SIZE}
-                            texture={texture}
-                            onClickAt={onHexClick}
-                            onTowerTopClick={(c) => onHexClick?.(c, { preferTowerMove: false })}
-                            onTowerBodyClick={(c) => onHexClick?.(c, { preferTowerMove: true })}
-                            getDieState={(die) => {
-                                if (die.id === selectedDieId) return "selected";
-                                return dieVisualById[die.id] ?? "default";
+                        <div
+                            style={{
+                                animation: stuckPulse
+                                    ? animationStyle("dieStuckPulse")
+                                    : "none",
                             }}
-                        />
+                        >
+                            <Hex
+                                property={property}
+                                focal={focal}
+                                state={interactionState}
+                                owner={owner}
+                                dice={dice}
+                                hexSize={HEX_SIZE}
+                                dieSize={DIE_SIZE}
+                                texture={texture}
+                                onClickAt={onHexClick}
+                                onTowerTopClick={(c) => onHexClick?.(c, { preferTowerMove: false })}
+                                onTowerBodyClick={(c) => onHexClick?.(c, { preferTowerMove: true })}
+                                getDieState={(die) => {
+                                    if (die.id === selectedDieId) return "selected";
+                                    return dieVisualById[die.id] ?? "default";
+                                }}
+                            />
+                        </div>
                     </div>
                 );
             })}
+            <BoardFxOverlay fx={fx} layout={layout} onComplete={onFxComplete} />
         </div>
     );
 }

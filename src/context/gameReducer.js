@@ -319,6 +319,8 @@ export function createReducer(mapHexSet, rollFn = rollD6) {
         switch (action.type) {
             // Run focal-point scoring at the start of each turn, then drop back into ACTION.
             case "EVALUATE_FOCAL_POINTS": {
+                // Ignore duplicate dispatches (React StrictMode remount / overlapping FX).
+                if (state.turnPhase !== "FOCAL") return state;
                 const { newState } = evaluateFocalPoints(state, rollFn);
                 // Reset prior-turn chrome; mark dice weakened by focal scoring as rerolled.
                 const dieVisualById = faceDropHints(state.dice, newState.dice, "rerolled");

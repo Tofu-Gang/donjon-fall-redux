@@ -1,8 +1,11 @@
+/* @import order: external fonts, then Tailwind, then Donjon tokens/keyframes */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,700&display=swap');
 @import "tailwindcss";
+/* Sibling style-guide (see vite.config.js alias) — tokens + game-piece @keyframes */
+@import "../../Style-guite-donjon-fall/src/lib/donjon/donjon.css";
 
 /* ============================ TkajUI/Donjon libraries ============================ */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,700&display=swap');
-@source "../node_modules/style-guide-donjon-fall/src/lib/**/*.{js,jsx}";
+@source "../../Style-guite-donjon-fall/src/lib/**/*.{js,jsx}";
 
 /* base styles */
 @theme {

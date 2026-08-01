@@ -85,17 +85,22 @@ export default function ActionPanel({
         ];
     }
 
-    if (actions.length === 0) return null;
-
+    // Always reserve the footer strip height so the centered board doesn't jump
+    // when this panel mounts/unmounts between ACTION / COMBAT / post-action beats.
     return (
-        <div className="flex shrink-0 justify-center" style={{ paddingBottom: 6 }}>
-            <ActionBar
-                actions={actions}
-                size="xs"
-                bordered={false}
-                showLabel={false}
-                showKeycap={false}
-            />
+        <div
+            className="flex shrink-0 justify-center"
+            style={{ paddingBottom: 6, minHeight: 52 }}
+        >
+            {actions.length > 0 && (
+                <ActionBar
+                    actions={actions}
+                    size="xs"
+                    bordered={false}
+                    showLabel={false}
+                    showKeycap={false}
+                />
+            )}
         </div>
     );
 }
