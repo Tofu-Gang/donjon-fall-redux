@@ -87,19 +87,22 @@ export default function ActionPanel({
 
     // Always reserve the footer strip height so the centered board doesn't jump
     // when this panel mounts/unmounts between ACTION / COMBAT / post-action beats.
+    // Empty strip clicks bubble to GameView (deselect); ActionBar stops that.
     return (
         <div
             className="flex shrink-0 justify-center"
             style={{ paddingBottom: 6, minHeight: 52 }}
         >
             {actions.length > 0 && (
-                <ActionBar
-                    actions={actions}
-                    size="xs"
-                    bordered={false}
-                    showLabel={false}
-                    showKeycap={false}
-                />
+                <div onClick={(event) => event.stopPropagation()}>
+                    <ActionBar
+                        actions={actions}
+                        size="xs"
+                        bordered={false}
+                        showLabel={false}
+                        showKeycap={false}
+                    />
+                </div>
             )}
         </div>
     );

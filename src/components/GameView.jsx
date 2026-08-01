@@ -10,6 +10,7 @@ import {
     DonjonModal,
     playerColorsByKey,
 } from "style-guide-donjon-fall/donjon";
+import { pickBotAction, pickBotCombatResolution } from "../ai/randomBot.js";
 import { useGame } from "../context/useGame.js";
 import { getLegalActions } from "../logic/actions.js";
 import { hexKey } from "../logic/hex.js";
@@ -27,6 +28,9 @@ import ScoreHeader from "./ScoreHeader.jsx";
 import ActionPanel from "./ActionPanel.jsx";
 
 const PLAYER_LABELS = { red: "Red", blue: "Blue" };
+/** Blue is a simple random bot so a human can play as red. */
+const BOT_PLAYER = "blue";
+const BOT_THINK_MS = 450;
 
 /**
  * ScreensPage desktop convention: 1024 JPG as a 256×256 repeating tile
@@ -127,18 +131,6 @@ export default function GameView() {
         setTowerMoveMode(false);
     }, []);
 
-    const playReject = useCallback(async (die) => {
-        if (!die || busy) return;
-        await play({
-            hideDieIds: [die.id],
-            items: [{
-                atKey: hexKey(die.coords),
-                dice: [die],
-                preset: "dieReject",
-            }],
-        });
-    }, [busy, play]);
-
     const runMoveAction = useCallback(async (action) => {
         const intoCombat = isCombatMove(state, action);
 
@@ -191,11 +183,11 @@ export default function GameView() {
     /**
      * Click handler shared by hexes and dice: tries a legal move to the clicked
      * hex first. If a die is already selected and the click is not a legal move
-     * target, plays reject feedback. Otherwise falls back to selecting the top
+     * target, clears selection. Otherwise falls back to selecting the top
      * friendly die there.
      */
     const handleHexClick = useCallback((coords, opts = {}) => {
-        if (busy) return;
+        if (busy || activePlayer === BOT_PLAYER) return;
         if (state.turnPhase !== "ACTION" || state.actionTaken) return;
 
         const key = hexKey(coords);
@@ -218,9 +210,10 @@ export default function GameView() {
             return;
         }
 
+        // Already selected and this hex/die is not a legal destination — deselect
+        // (covers blocked empty hexes, enemy dice, and other friendly pieces).
         if (selectedDieId) {
-            // Blocked / illegal target — shake the selected die, keep selection.
-            void playReject(selectedDie);
+            clearSelection();
             return;
         }
 
@@ -237,18 +230,21 @@ export default function GameView() {
         towerMoveMode,
         activePlayer,
         runMoveAction,
-        playReject,
+        clearSelection,
     ]);
 
-    const handleBackgroundClick = useCallback((event) => {
-        if (event.target !== event.currentTarget) return;
+    // Any click that bubbles here is "background" (hexes and action controls
+    // stopPropagation). Clears selection without needing target === currentTarget,
+    // which fails once nested flex wrappers fill the viewport.
+    const handleBackgroundClick = useCallback(() => {
         if (busy) return;
         clearSelection();
     }, [clearSelection, busy]);
 
-    const handleReroll = useCallback(async () => {
-        if (!selectedDieId || busy) return;
-        const die = state.dice[selectedDieId];
+    const runRerollAction = useCallback(async (dieId) => {
+        if (busy) return;
+        const die = state.dice[dieId];
+        if (!die) return;
         await play({
             hideDieIds: [die.id],
             items: [{
@@ -257,38 +253,30 @@ export default function GameView() {
                 preset: "dieRerollSpin",
             }],
         });
-        performAction({ type: "REROLL", dieId: selectedDieId });
+        performAction({ type: "REROLL", dieId });
         clearSelection();
-    }, [selectedDieId, busy, state.dice, play, performAction, clearSelection]);
+    }, [busy, state.dice, play, performAction, clearSelection]);
 
-    const handleTowerCollapse = useCallback(async () => {
-        const die = selectedDieId ? state.dice[selectedDieId] : null;
-        if (!die || busy) return;
-        const stack = getDiceAtHex(state.dice, die.coords);
+    const runCollapseAction = useCallback(async (coords) => {
+        if (busy) return;
+        const stack = getDiceAtHex(state.dice, coords);
         const bottom = stack[0];
+        if (!bottom) return;
         const isEnemy = bottom.owner !== activePlayer;
         await play({
             hideDieIds: [bottom.id],
             items: [{
-                atKey: hexKey(die.coords),
+                atKey: hexKey(coords),
                 dice: [bottom],
                 preset: "dieCollapse",
                 feedback: isEnemy ? { text: "+1 VP", variant: "vp" } : undefined,
             }],
         });
-        performAction({ type: "TOWER_COLLAPSE", coords: die.coords });
+        performAction({ type: "TOWER_COLLAPSE", coords });
         clearSelection();
-    }, [
-        selectedDieId,
-        busy,
-        state.dice,
-        activePlayer,
-        play,
-        performAction,
-        clearSelection,
-    ]);
+    }, [busy, state.dice, activePlayer, play, performAction, clearSelection]);
 
-    const handleCombat = useCallback(async (resolution) => {
+    const runCombatResolution = useCallback(async (resolution) => {
         if (busy || !state.pendingCombat) return;
         const { attackerCoords, defenderCoords, attackerDieId } = state.pendingCombat;
         const attacker = state.dice[attackerDieId]
@@ -339,6 +327,69 @@ export default function GameView() {
 
         resolveCombat(resolution);
     }, [busy, state, play, resolveCombat]);
+
+    const handleReroll = useCallback(() => {
+        if (!selectedDieId || activePlayer === BOT_PLAYER) return;
+        void runRerollAction(selectedDieId);
+    }, [selectedDieId, activePlayer, runRerollAction]);
+
+    const handleTowerCollapse = useCallback(() => {
+        const die = selectedDieId ? state.dice[selectedDieId] : null;
+        if (!die || activePlayer === BOT_PLAYER) return;
+        void runCollapseAction(die.coords);
+    }, [selectedDieId, state.dice, activePlayer, runCollapseAction]);
+
+    const handleCombat = useCallback((resolution) => {
+        if (activePlayer === BOT_PLAYER) return;
+        void runCombatResolution(resolution);
+    }, [activePlayer, runCombatResolution]);
+
+    // Blue bot: same FX paths as the human player.
+    useEffect(() => {
+        if (winner || busy) return;
+        if (activePlayer !== BOT_PLAYER) return;
+
+        let cancelled = false;
+        const timer = setTimeout(() => {
+            if (cancelled) return;
+
+            if (state.turnPhase === "ACTION" && !state.actionTaken) {
+                const legal = getLegalActions(state, mapHexSet);
+                if (legal.length === 0) return;
+                const action = pickBotAction(legal);
+                clearSelection();
+                if (action.type === "MOVE_DIE" || action.type === "MOVE_TOWER") {
+                    void runMoveAction(action);
+                } else if (action.type === "REROLL") {
+                    void runRerollAction(action.dieId);
+                } else if (action.type === "TOWER_COLLAPSE") {
+                    void runCollapseAction(action.coords);
+                }
+                return;
+            }
+
+            if (state.turnPhase === "COMBAT" && state.pendingCombat) {
+                void runCombatResolution(
+                    pickBotCombatResolution(state.pendingCombat),
+                );
+            }
+        }, BOT_THINK_MS);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+        // Intentionally keyed to turn identity / phase / combat, not every state field.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        activePlayer,
+        state.turnPhase,
+        state.actionTaken,
+        state.pendingCombat,
+        state.turnNumber,
+        winner,
+        busy,
+    ]);
 
     const reasonLabel = {
         SCORE: "Victory points",
