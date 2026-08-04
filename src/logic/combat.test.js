@@ -342,6 +342,29 @@ describe("resolveCombatPush", () => {
         expect(result["att"].coords).toEqual(H1);
     });
 
+    it("pushes one hex when the attacker strikes from several hexes away", () => {
+        // Formation-push scenario shape: empty | B | B | empty | empty | R
+        const H4 = {q: 4, r: -4, s: 0};
+        const H5 = {q: 5, r: -5, s: 0};
+        const mapLine = makeMap(H0, H1, H2, H3, H4, H5);
+        const dice = makeDice(
+            makeDie("att", 5, -5, 0, 0, "red", 5),
+            makeDie("d1",  1, -1, 0, 0, "blue", 3),
+            makeDie("d2",  2, -2, 0, 0, "blue", 3),
+        );
+        // Attack direction must be the final approach step, not the raw H5→H2 delta.
+        const attackDirection = {q: -1, r: 1, s: 0};
+        const {dice: result, pointsScored} = resolveCombatPush(
+            dice, mapLine, H5, H2, roll(3), attackDirection,
+        );
+        expect(result["d2"].coords).toEqual(H1);
+        expect(result["d1"].coords).toEqual(H0);
+        expect(result["att"].coords).toEqual(H2);
+        expect(pointsScored).toBe(0);
+        expect(result["d1"]).toBeDefined();
+        expect(result["d2"]).toBeDefined();
+    });
+
     it("stops the formation at an own die in the chain — own die triggers encirclement", () => {
         // att at H0 (red), d1 at H1 (blue), own2 at H2 (red).
         // Formation = [H1] only (own2 is not an enemy so it is excluded).

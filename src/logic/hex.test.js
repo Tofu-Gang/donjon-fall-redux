@@ -141,10 +141,16 @@ describe("hexLine", () => {
 });
 
 describe("hexDirection", () => {
-    it("returns the raw delta vector from one to other", () => {
+    it("returns a unit step from one to other", () => {
         const one = {q: 1, r: -1, s: 0};
         const other = {q: 3, r: -3, s: 0};
-        expect(hexDirection(one, other)).toEqual({q: 2, r: -2, s: 0});
+        expect(hexDirection(one, other)).toEqual({q: 1, r: -1, s: 0});
+    });
+
+    it("returns the neighbor delta for adjacent hexes", () => {
+        const one = {q: 0, r: 0, s: 0};
+        const other = {q: 1, r: -1, s: 0};
+        expect(hexDirection(one, other)).toEqual({q: 1, r: -1, s: 0});
     });
 
     it("returns zero vector for identical hexes", () => {

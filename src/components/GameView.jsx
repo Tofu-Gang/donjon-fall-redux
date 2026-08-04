@@ -312,7 +312,16 @@ export default function GameView() {
             });
         } else {
             const defenderStack = getDiceAtHex(state.dice, defenderCoords);
-            const { dx, dy } = hexPixelDelta(attackerCoords, defenderCoords);
+            // Push animates one hex along the attack direction (not the full approach path).
+            const dir = state.pendingCombat.attackDirection;
+            const pushTo = dir
+                ? {
+                    q: defenderCoords.q + dir.q,
+                    r: defenderCoords.r + dir.r,
+                    s: defenderCoords.s + dir.s,
+                }
+                : defenderCoords;
+            const { dx, dy } = hexPixelDelta(defenderCoords, pushTo);
             await play({
                 hideDieIds: defenderStack.map((d) => d.id),
                 items: [{

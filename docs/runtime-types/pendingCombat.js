@@ -9,5 +9,6 @@
  * @property {string} attackerDieId - ID of the die (or tower top die) that initiated the attack
  * @property {HexCoords} attackerCoords - hex the attacker occupied before moving (not yet vacated)
  * @property {HexCoords} defenderCoords - hex the attacker is moving into (target of the attack)
+ * @property {HexCoords} attackDirection - unit cube step of the final path edge into the defender
  * @property {boolean} isTowerAttack - true when the attacker is a tower; Occupy is unavailable in that case
  */

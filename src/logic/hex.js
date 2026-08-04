@@ -103,20 +103,21 @@ export function hexLine(one, other) {
 }
 
 /**
- * Returns a non-normalized direction vector pointing from one hex toward another.
- * The vector components are raw coordinate deltas, not unit steps — callers must step
- * along it one hex at a time using neighbor logic.
- * Used to determine push direction: attacker's position → defender's position.
+ * Returns a unit direction vector pointing from one hex toward another.
+ * The hexes must be colinear on the cube grid (always true for adjacent hexes).
+ * Used for push direction: one step along the attack line.
  *
- * @param {HexCoords} one - origin hex (e.g. attacking die position)
+ * @param {HexCoords} one - origin hex (e.g. last hex before the attack target)
  * @param {HexCoords} other - target hex (e.g. defending die position)
- * @returns {HexCoords} delta vector { q, r, s }
+ * @returns {HexCoords} unit step { q, r, s }, or zeros when one === other
  */
 export function hexDirection(one, other) {
+    const dist = hexDistance(one, other);
+    if (dist === 0) return {q: 0, r: 0, s: 0};
     return {
-        q: other.q - one.q,
-        r: other.r - one.r,
-        s: other.s - one.s,
+        q: (other.q - one.q) / dist,
+        r: (other.r - one.r) / dist,
+        s: (other.s - one.s) / dist,
     };
 }
 

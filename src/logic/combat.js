@@ -237,12 +237,14 @@ function collectFormation(dice, mapHexSet, attackerOwner, defenderCoords, direct
  * @param {HexCoords} attackerCoords
  * @param {HexCoords} defenderCoords
  * @param {() => number} rollFn - returns a random face value within the die's valid range
+ * @param {HexCoords | null} [attackDirection=null] - unit step into the defender; derived from
+ *   attacker→defender when omitted (requires those hexes to be colinear)
  * @returns {{ dice: DiceMap, pointsScored: number }}
  */
-export function resolveCombatPush(dice, mapHexSet, attackerCoords, defenderCoords, rollFn) {
+export function resolveCombatPush(dice, mapHexSet, attackerCoords, defenderCoords, rollFn, attackDirection = null) {
     const attackerTopDie = getTopDie(dice, attackerCoords);
     const attackerOwner = attackerTopDie.owner;
-    const direction = hexDirection(attackerCoords, defenderCoords);
+    const direction = attackDirection ?? hexDirection(attackerCoords, defenderCoords);
     const formation = collectFormation(dice, mapHexSet, attackerOwner, defenderCoords, direction);
 
     // Reroll the first formation member's top die: min(roll, original).

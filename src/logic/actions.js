@@ -86,8 +86,14 @@ function bfsDie(dice, startCoords, movingRange, activePlayer, mapHexSet) {
 
             const newPath = [...path, neighbor];
 
+            // Keep the shortest path to each destination. Later BFS visits can otherwise
+            // overwrite a direct adjacent attack with a long detour whose final step
+            // approaches from the wrong direction (breaking push/encirclement).
             if (canStop && nKey !== startKey) {
-                reachable.set(nKey, { coords: neighbor, path: newPath });
+                const existing = reachable.get(nKey);
+                if (!existing || newPath.length < existing.path.length) {
+                    reachable.set(nKey, { coords: neighbor, path: newPath });
+                }
             }
 
             if (canPass) {
@@ -153,7 +159,10 @@ function bfsTower(dice, startCoords, towerCp, towerRange, activePlayer, mapHexSe
             const newPath = [...path, neighbor];
 
             if (canStop && nKey !== startKey) {
-                reachable.set(nKey, { coords: neighbor, path: newPath });
+                const existing = reachable.get(nKey);
+                if (!existing || newPath.length < existing.path.length) {
+                    reachable.set(nKey, { coords: neighbor, path: newPath });
+                }
             }
 
             if (canPass) {

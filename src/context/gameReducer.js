@@ -2,7 +2,7 @@
 import { evaluateFocalPoints } from "../logic/focalPoints.js";
 import { getDiceAtHex, getNextStackIndex, getTopDie } from "../logic/dice.js";
 import { buildJumpContextAlongPath, resolveCombatOccupy, resolveCombatPhase1, resolveCombatPush } from "../logic/combat.js";
-import { hexKey } from "../logic/hex.js";
+import { hexDirection, hexKey } from "../logic/hex.js";
 import { isGameOver } from "../logic/actions.js";
 import mapDataDefault from "../maps/default.json";
 
@@ -77,8 +77,8 @@ export function buildInitialState(mapData, randomizeDice, rollFn = rollD6) {
         }
     }
 
-    // Player 2 (blue) — same shape as red, but uses the static face values from the map.
-    // (Blue's starting faces are not rolled even when randomizeDice is true; that's intentional.)
+    // Player 2 (blue) — with randomizeDice, mirrors red's rolled faces (same shape assumed);
+    // otherwise uses each base hex's own map face values (asymmetric scenarios allowed).
     for (let hexIdx = 0; hexIdx < secondBaseHexes.length; hexIdx++) {
         const baseHex = secondBaseHexes[hexIdx];
         for (let dieIdx = 0; dieIdx < baseHex.dice.length; dieIdx++) {
@@ -86,7 +86,9 @@ export function buildInitialState(mapData, randomizeDice, rollFn = rollD6) {
             dice[id] = {
                 id,
                 owner: "blue",
-                faceValue: firstFaceValues[hexIdx][dieIdx],
+                faceValue: randomizeDice
+                    ? firstFaceValues[hexIdx][dieIdx]
+                    : baseHex.dice[dieIdx].faceValue,
                 coords: baseHex.coords,
                 stackIndex: baseHex.dice[dieIdx].stackIndex,
             };
@@ -197,6 +199,8 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
         if (isCombatTarget) {
             // Park in COMBAT phase with the pending combat describing attacker/defender coords.
             // Jump bonuses are kept for the remainder of the turn (cleared on END_TURN).
+            // Attack direction is the last path step (attacker may still sit several hexes away).
+            const approachFrom = path[path.length - 2] ?? die.coords;
             return {
                 ...state,
                 turnPhase: "COMBAT",
@@ -204,6 +208,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
                     attackerDieId: dieId,
                     attackerCoords: die.coords,
                     defenderCoords: targetCoords,
+                    attackDirection: hexDirection(approachFrom, targetCoords),
                     isTowerAttack: false,
                 },
                 turnContext,
@@ -233,6 +238,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
         if (isCombatTarget) {
             // For tower attacks, the attacker is the top die of the moving stack.
             const topDie = stack[stack.length - 1];
+            const approachFrom = path[path.length - 2] ?? coords;
             return {
                 ...state,
                 turnPhase: "COMBAT",
@@ -240,6 +246,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
                     attackerDieId: topDie.id,
                     attackerCoords: coords,
                     defenderCoords: targetCoords,
+                    attackDirection: hexDirection(approachFrom, targetCoords),
                     isTowerAttack: true,
                 },
                 actionTaken: true,
@@ -270,7 +277,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
  */
 export function applyCombatResolution(state, resolution, mapHexSet, rollFn = rollD6) {
     const { pendingCombat, dice } = state;
-    const { attackerDieId, attackerCoords, defenderCoords } = pendingCombat;
+    const { attackerDieId, attackerCoords, defenderCoords, attackDirection } = pendingCombat;
     const activePlayer = state.turnOrder[state.currentTurnIndex];
 
     // Phase 1 (combat dice rolling, etc.) runs for both resolutions before branching.
@@ -279,7 +286,7 @@ export function applyCombatResolution(state, resolution, mapHexSet, rollFn = rol
 
     if (resolution === "PUSH") {
         const { dice: pushedDice, pointsScored } = resolveCombatPush(
-            newDice, mapHexSet, attackerCoords, defenderCoords, rollFn
+            newDice, mapHexSet, attackerCoords, defenderCoords, rollFn, attackDirection
         );
         newDice = pushedDice;
         extraPoints = pointsScored;
