@@ -26,6 +26,7 @@ import mapData from "../maps/default.json";
 import Board from "./Board.jsx";
 import ScoreHeader from "./ScoreHeader.jsx";
 import ActionPanel from "./ActionPanel.jsx";
+import { PhaseIndicator, FocalPointIcon, MoveIcon, SwordIcon } from "style-guide-donjon-fall/donjon";
 
 const PLAYER_LABELS = { red: "Red", blue: "Blue" };
 /** Blue is a simple random bot so a human can play as red. */
@@ -412,6 +413,15 @@ export default function GameView() {
             onClick={handleBackgroundClick}
         >
             <ScoreHeader state={state} />
+            <PhaseIndicator
+                className="my-4 w-50"
+                phases={[
+                    { id: "FOCAL", label: "Focal", icon: <FocalPointIcon /> },
+                    { id: "ACTION", label: "Action", icon: <MoveIcon /> },
+                    { id: "COMBAT", label: "Combat", icon: <SwordIcon /> },
+                ]}
+                currentPhase={state.turnPhase}
+            />
             <div className="flex w-full flex-1 items-center justify-center overflow-hidden">
                 <Board
                     mapData={mapData}
