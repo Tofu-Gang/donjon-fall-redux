@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 // Grass URLs come from donjon-fall-ui's `./textures` subpath — not the main
 // barrel (`…/donjon`). That subpath is an intentional exception to the usual
 // tsup→dist export pattern (tokens/enums/playerColors): it ships as source
@@ -9,6 +9,11 @@ import {
     DonjonButton,
     DonjonModal,
     playerColorsByKey,
+    PhaseIndicator,
+    FocalPointIcon,
+    MoveIcon,
+    SwordIcon,
+    useBreakpoint,
 } from "style-guide-donjon-fall/donjon";
 import { pickBotAction, pickBotCombatResolution } from "../ai/randomBot.js";
 import { useGame } from "../context/useGame.js";
@@ -26,7 +31,7 @@ import mapData from "../maps/default.json";
 import Board from "./Board.jsx";
 import ScoreHeader from "./ScoreHeader.jsx";
 import ActionPanel from "./ActionPanel.jsx";
-import { PhaseIndicator, FocalPointIcon, MoveIcon, SwordIcon } from "style-guide-donjon-fall/donjon";
+import GameHistoryPanels from "./GameHistoryPanels.jsx";
 
 const PLAYER_LABELS = { red: "Red", blue: "Blue" };
 /** Blue is a simple random bot so a human can play as red. */
@@ -57,11 +62,21 @@ export default function GameView() {
         performAction,
         resolveCombat,
         endTurn,
+        logGameOver,
     } = useGame();
+
+    const { isDesktop } = useBreakpoint();
+    const gameOverLogged = useRef(false);
 
     const [selectedDieId, setSelectedDieId] = useState(null);
     const [towerMoveMode, setTowerMoveMode] = useState(false);
     const { fx, busy, play, complete } = useBoardFx();
+
+    useEffect(() => {
+        if (!winner || gameOverLogged.current) return;
+        gameOverLogged.current = true;
+        logGameOver(winner, reason);
+    }, [winner, reason, logGameOver]);
 
     const activePlayer = state.turnOrder[state.currentTurnIndex];
     const stuckOwner = reason === "SUDDEN_DEATH"
@@ -422,21 +437,47 @@ export default function GameView() {
                 ]}
                 currentPhase={state.turnPhase}
             />
-            <div className="flex w-full flex-1 items-center justify-center overflow-hidden">
-                <Board
-                    mapData={mapData}
+            <div className="flex w-full flex-1 items-center justify-center gap-3 overflow-hidden px-1">
+                <GameHistoryPanels
                     state={state}
-                    mapHexSet={mapHexSet}
-                    selectedDieId={selectedDieId}
-                    towerMoveMode={towerMoveMode}
-                    onHexClick={handleHexClick}
-                    onDeselect={busy ? undefined : clearSelection}
-                    texture={grassTile1024}
-                    fx={fx}
-                    onFxComplete={complete}
-                    stuckOwner={stuckOwner}
+                    winner={winner}
+                    reason={reason}
+                    variant="timeline"
+                />
+                <div className="flex min-w-0 flex-1 items-center justify-center overflow-hidden">
+                    <Board
+                        mapData={mapData}
+                        state={state}
+                        mapHexSet={mapHexSet}
+                        selectedDieId={selectedDieId}
+                        towerMoveMode={towerMoveMode}
+                        onHexClick={handleHexClick}
+                        onDeselect={busy ? undefined : clearSelection}
+                        texture={grassTile1024}
+                        fx={fx}
+                        onFxComplete={complete}
+                        stuckOwner={stuckOwner}
+                    />
+                </div>
+                <GameHistoryPanels
+                    state={state}
+                    winner={winner}
+                    reason={reason}
+                    variant="eventLog"
+                    slot="side"
                 />
             </div>
+            {!isDesktop && (
+                <div className="mt-3 flex w-full justify-center px-2">
+                    <GameHistoryPanels
+                        state={state}
+                        winner={winner}
+                        reason={reason}
+                        variant="eventLog"
+                        slot="below"
+                    />
+                </div>
+            )}
             <ActionPanel
                 state={state}
                 mapHexSet={mapHexSet}

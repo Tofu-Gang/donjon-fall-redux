@@ -4,6 +4,12 @@ import { getDiceAtHex, getNextStackIndex, getTopDie } from "../logic/dice.js";
 import { buildJumpContextAlongPath, resolveCombatOccupy, resolveCombatPhase1, resolveCombatPush } from "../logic/combat.js";
 import { hexDirection, hexKey } from "../logic/hex.js";
 import { isGameOver } from "../logic/actions.js";
+import {
+    appendEvents,
+    flushTurnSummary,
+    formatCoords,
+    PLAYER_LABELS,
+} from "../logic/eventLog.js";
 import mapDataDefault from "../maps/default.json";
 
 /**
@@ -126,6 +132,14 @@ export function buildInitialState(mapData, randomizeDice, rollFn = rollD6) {
         // Ephemeral DieFace chrome: dieId → "rerolled" | "damaged". Cleared at
         // the start of each FOCAL evaluation (next turn).
         dieVisualById: {},
+        events: [{
+            id: "0",
+            type: "system",
+            text: "Game started",
+            round: 1,
+        }],
+        eventIdSeq: 0,
+        turnSummaries: [],
     };
 }
 
@@ -166,12 +180,23 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
     if (gameAction.type === "REROLL") {
         const die = dice[gameAction.dieId];
         const newValue = Math.max(rollFn(), die.faceValue);
-        return {
+        const next = {
             ...state,
             dice: { ...dice, [die.id]: { ...die, faceValue: newValue } },
             actionTaken: true,
             dieVisualById: { ...state.dieVisualById, [die.id]: "rerolled" },
         };
+        const detail = newValue === die.faceValue
+            ? `Kept ${newValue}`
+            : `${die.faceValue} → ${newValue}`;
+        return appendEvents(next, [{
+            type: "event",
+            text: `${PLAYER_LABELS[activePlayer]} rerolled`,
+            detail,
+            round: state.turnNumber,
+            player: activePlayer,
+            tag: "Reroll",
+        }]);
     }
 
     // TOWER_COLLAPSE: removes the bottom die of the stack and awards a VP if it was an enemy die.
@@ -184,7 +209,25 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
         const players = isEnemy
             ? { ...state.players, [activePlayer]: state.players[activePlayer] + 1 }
             : state.players;
-        return { ...state, dice: newDice, players, actionTaken: true };
+        const next = { ...state, dice: newDice, players, actionTaken: true };
+        if (isEnemy) {
+            return appendEvents(next, [{
+                type: "gain",
+                text: `+1 VP — ${PLAYER_LABELS[activePlayer]}`,
+                detail: "Tower collapse",
+                round: state.turnNumber,
+                player: activePlayer,
+                tag: "Collapse",
+            }]);
+        }
+        return appendEvents(next, [{
+            type: "event",
+            text: `${PLAYER_LABELS[activePlayer]} collapsed a tower`,
+            detail: `Removed own die at ${formatCoords(gameAction.coords)}`,
+            round: state.turnNumber,
+            player: activePlayer,
+            tag: "Collapse",
+        }]);
     }
 
     // MOVE_DIE: walks the die along its path; entering an enemy hex opens combat instead of completing the move.
@@ -201,7 +244,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
             // Jump bonuses are kept for the remainder of the turn (cleared on END_TURN).
             // Attack direction is the last path step (attacker may still sit several hexes away).
             const approachFrom = path[path.length - 2] ?? die.coords;
-            return {
+            const next = {
                 ...state,
                 turnPhase: "COMBAT",
                 pendingCombat: {
@@ -214,17 +257,33 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
                 turnContext,
                 actionTaken: true,
             };
+            return appendEvents(next, [{
+                type: "event",
+                text: `${PLAYER_LABELS[activePlayer]} attacked`,
+                detail: `Combat at ${formatCoords(targetCoords)}`,
+                round: state.turnNumber,
+                player: activePlayer,
+                tag: "Combat",
+            }]);
         }
 
         // Peaceful move: place the die on top of whatever is at the destination.
         const newStackIndex = getNextStackIndex(dice, targetCoords);
         const newDice = { ...dice, [dieId]: { ...die, coords: targetCoords, stackIndex: newStackIndex } };
-        return {
+        const next = {
             ...state,
             dice: newDice,
             turnContext,
             actionTaken: true,
         };
+        return appendEvents(next, [{
+            type: "event",
+            text: `${PLAYER_LABELS[activePlayer]} moved a die`,
+            detail: `To ${formatCoords(targetCoords)}`,
+            round: state.turnNumber,
+            player: activePlayer,
+            tag: "Move",
+        }]);
     }
 
     // MOVE_TOWER: like MOVE_DIE, but moves the entire stack in one shot.
@@ -239,7 +298,7 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
             // For tower attacks, the attacker is the top die of the moving stack.
             const topDie = stack[stack.length - 1];
             const approachFrom = path[path.length - 2] ?? coords;
-            return {
+            const next = {
                 ...state,
                 turnPhase: "COMBAT",
                 pendingCombat: {
@@ -251,6 +310,14 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
                 },
                 actionTaken: true,
             };
+            return appendEvents(next, [{
+                type: "event",
+                text: `${PLAYER_LABELS[activePlayer]} attacked with a tower`,
+                detail: `Combat at ${formatCoords(targetCoords)}`,
+                round: state.turnNumber,
+                player: activePlayer,
+                tag: "Combat",
+            }]);
         }
 
         // Peaceful tower move: relocate every die in the stack to the new hex, preserving relative order.
@@ -258,7 +325,15 @@ export function applyGameAction(state, gameAction, rollFn = rollD6) {
         for (const die of stack) {
             newDice[die.id] = { ...die, coords: targetCoords };
         }
-        return { ...state, dice: newDice, actionTaken: true };
+        const next = { ...state, dice: newDice, actionTaken: true };
+        return appendEvents(next, [{
+            type: "event",
+            text: `${PLAYER_LABELS[activePlayer]} moved a tower`,
+            detail: `To ${formatCoords(targetCoords)}`,
+            round: state.turnNumber,
+            player: activePlayer,
+            tag: "Move tower",
+        }]);
     }
 
     // Unknown action type is a no-op; the UI is the source of truth for valid actions.
@@ -302,7 +377,12 @@ export function applyCombatResolution(state, resolution, mapHexSet, rollFn = rol
     // Defender face drops from the push reroll → DieFace "damaged" chrome.
     const dieVisualById = faceDropHints(dice, newDice, "damaged", state.dieVisualById);
 
-    return {
+    const attacker = dice[attackerDieId] ?? getTopDie(dice, attackerCoords);
+    const attackerAfter = attacker
+        ? Math.max(attacker.faceValue - 1, 1)
+        : null;
+
+    let next = {
         ...state,
         dice: newDice,
         players,
@@ -312,6 +392,52 @@ export function applyCombatResolution(state, resolution, mapHexSet, rollFn = rol
         turnContext: state.turnContext,
         dieVisualById,
     };
+
+    const logEntries = [];
+    if (attacker && attackerAfter !== null) {
+        logEntries.push({
+            type: "loss",
+            text: `${PLAYER_LABELS[activePlayer]} attacker −1`,
+            detail: attacker.faceValue === attackerAfter
+                ? `Stays at ${attackerAfter}`
+                : `${attacker.faceValue} → ${attackerAfter}`,
+            round: state.turnNumber,
+            player: activePlayer,
+            tag: "Combat",
+        });
+    }
+
+    if (resolution === "PUSH") {
+        logEntries.push({
+            type: "event",
+            text: `${PLAYER_LABELS[activePlayer]} pushed the formation`,
+            detail: extraPoints > 0 ? "Enemy die destroyed" : undefined,
+            round: state.turnNumber,
+            player: activePlayer,
+            tag: "Push",
+        });
+        if (extraPoints > 0) {
+            logEntries.push({
+                type: "gain",
+                text: `+${extraPoints} VP — ${PLAYER_LABELS[activePlayer]}`,
+                detail: "Push",
+                round: state.turnNumber,
+                player: activePlayer,
+                tag: "Push",
+            });
+        }
+    } else {
+        logEntries.push({
+            type: "event",
+            text: `${PLAYER_LABELS[activePlayer]} occupied the hex`,
+            detail: `At ${formatCoords(defenderCoords)}`,
+            round: state.turnNumber,
+            player: activePlayer,
+            tag: "Occupy",
+        });
+    }
+
+    return appendEvents(next, logEntries);
 }
 
 /**
@@ -328,10 +454,27 @@ export function createReducer(mapHexSet, rollFn = rollD6) {
             case "EVALUATE_FOCAL_POINTS": {
                 // Ignore duplicate dispatches (React StrictMode remount / overlapping FX).
                 if (state.turnPhase !== "FOCAL") return state;
-                const { newState } = evaluateFocalPoints(state, rollFn);
+                const activePlayer = state.turnOrder[state.currentTurnIndex];
+                const { newState, pointsScored } = evaluateFocalPoints(state, rollFn);
                 // Reset prior-turn chrome; mark dice weakened by focal scoring as rerolled.
                 const dieVisualById = faceDropHints(state.dice, newState.dice, "rerolled");
-                return { ...newState, turnPhase: "ACTION", actionTaken: false, dieVisualById };
+                let next = {
+                    ...newState,
+                    turnPhase: "ACTION",
+                    actionTaken: false,
+                    dieVisualById,
+                };
+                if (pointsScored > 0) {
+                    next = appendEvents(next, [{
+                        type: "gain",
+                        text: `+${pointsScored} VP — ${PLAYER_LABELS[activePlayer]}`,
+                        detail: "Focal point",
+                        round: state.turnNumber,
+                        player: activePlayer,
+                        tag: "Focal",
+                    }]);
+                }
+                return next;
             }
             // Forward player actions to the pure applyGameAction helper.
             case "PERFORM_ACTION":
@@ -342,8 +485,10 @@ export function createReducer(mapHexSet, rollFn = rollD6) {
             // Advance to the next player in turn order; reset per-turn state and start a new FOCAL phase.
             case "END_TURN": {
                 const nextIndex = (state.currentTurnIndex + 1) % state.turnOrder.length;
-                return {
-                    ...state,
+                const nextPlayer = state.turnOrder[nextIndex];
+                let next = flushTurnSummary(state);
+                next = {
+                    ...next,
                     currentTurnIndex: nextIndex,
                     turnNumber: state.turnNumber + 1,
                     turnPhase: "FOCAL",
@@ -351,6 +496,26 @@ export function createReducer(mapHexSet, rollFn = rollD6) {
                     pendingCombat: null,
                     actionTaken: false,
                 };
+                return appendEvents(next, [{
+                    type: "system",
+                    text: `${PLAYER_LABELS[nextPlayer]}'s turn`,
+                    round: state.turnNumber + 1,
+                    player: nextPlayer,
+                }]);
+            }
+            case "LOG_GAME_OVER": {
+                const { winner, reason } = action;
+                const reasonLabel = {
+                    SCORE: "Victory points",
+                    SUDDEN_DEATH: "Sudden death",
+                }[reason] ?? reason;
+                return appendEvents(state, [{
+                    type: reason === "SUDDEN_DEATH" ? "warning" : "system",
+                    text: `${PLAYER_LABELS[winner]} wins`,
+                    detail: reasonLabel,
+                    round: state.turnNumber,
+                    player: winner,
+                }]);
             }
             // Unknown actions are ignored — keeps the reducer pure and easy to extend.
             default:

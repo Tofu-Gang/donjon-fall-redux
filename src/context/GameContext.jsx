@@ -34,6 +34,7 @@ export function GameProvider({ mapData = mapDataDefault, randomizeDice = false, 
         performAction: (gameAction) => dispatch({ type: "PERFORM_ACTION", gameAction }),
         resolveCombat: (resolution) => dispatch({ type: "RESOLVE_COMBAT", resolution }),
         endTurn: () => dispatch({ type: "END_TURN" }),
+        logGameOver: (winner, reason) => dispatch({ type: "LOG_GAME_OVER", winner, reason }),
     }), [state, mapHexSet, winner, reason]);
 
     return (
